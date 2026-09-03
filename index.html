@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3owL - Polish Translator Portfolio</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        accent: '#06b6d4'
+                    },
+                    animation: {
+                        'scroll': 'scroll 30s linear infinite',
+                    },
+                    keyframes: {
+                        scroll: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow-x: hidden; }
+        .glass { background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .marquee-container {
+            display: flex;
+            width: max-content;
+        }
+        .marquee-container:hover {
+            animation-play-state: paused;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const renderStars = (rating) => {
+            const stars = [];
+            for (let i = 1; i <= 5; i++) {
+                if (i <= Math.floor(rating)) {
+                    stars.push(<span key={i} className="text-yellow-400">★</span>);
+                } else if (i === Math.ceil(rating) && rating % 1 !== 0) {
+                    const percentage = (rating % 1) * 100;
+                    stars.push(
+                        <span key={i} className="relative inline-block text-gray-600">
+                            ★
+                            <span className="absolute top-0 left-0 overflow-hidden text-yellow-400" style={{ width: `${percentage}%` }}>
+                                ★
+                            </span>
+                        </span>
+                    );
+                } else {
+                    stars.push(<span key={i} className="text-gray-600">★</span>);
+                }
+            }
+            return <div className="flex gap-0.5 items-center">{stars}</div>;
+        };
+
+        const calculateAverageRating = (ratings) => {
+            if (!ratings || ratings.length === 0) return 0;
+            const sum = ratings.reduce((acc, curr) => acc + curr.value, 0);
+            return (sum / ratings.length).toFixed(1);
+        };
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
+        const getSteamAppId = (url) => {
+            if (!url) return null;
+            const match = url.match(/\/app\/(\d+)/);
+            return match ? match[1] : null;
+        };
+
+        const defaultCategories = [
+            { category: "Speed", value: 5 },
+            { category: "Communication", value: 5 },
+            { category: "Professionalism", value: 5 },
+            { category: "Reliability", value: 5 }
+        ];
+
+        function App() {
+            const [reviews, setReviews] = useState([]);
+            const [projects, setProjects] = useState([]);
+            const [inviteCodes, setInviteCodes] = useState([]);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [showAuth, setShowAuth] = useState(false);
+            const [clickTimes, setClickTimes] = useState([]);
+            const [activeTab, setActiveTab] = useState('portfolio');
+
+            const handleSecretClick = () => {
+                const now = Date.now();
+                const times = [...clickTimes, now].filter(t => now - t < 1000); 
+                if (times.length >= 3) {
+                    setShowAuth(true);
+                    setClickTimes([]);
+                } else {
+                    setClickTimes(times);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col relative">
+                    <header className="glass sticky top-0 z-40 py-4 px-8 flex justify-between items-center border-b border-gray-800">
+                        <div>
+                            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent to-blue-500">
+                                M3owL
+                            </h1>
+                            <p className="text-sm text-gray-400">Jakub K. | Discord: <span className="text-white font-mono">_m3owl</span> | Junior Polish Game Translator</p>
+                        </div>
+                        
+                        <nav className="flex gap-6 font-bold">
+                            <button onClick={() => setActiveTab('about')} className={`transition-colors ${activeTab === 'about' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}>About Me</button>
+                            <button onClick={() => setActiveTab('portfolio')} className={`transition-colors ${activeTab === 'portfolio' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}>Portfolio</button>
+                            <button onClick={() => setActiveTab('reviews')} className={`transition-colors ${activeTab === 'reviews' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}>Reviews</button>
+                        </nav>
+
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setIsAdmin(false)}
+                                className="bg-red-900/80 hover:bg-red-800 text-white px-4 py-2 rounded border border-red-600 transition-colors font-bold text-sm">
+                                Logout (Admin)
+                            </button>
+                        )}
+                    </header>
+
+                    <main className="flex-grow p-8 max-w-7xl mx-auto w-full relative">
+                        {activeTab === 'about' && <AboutMe />}
+                        {activeTab === 'portfolio' && <PortfolioTab projects={projects} setProjects={setProjects} reviews={reviews} isAdmin={isAdmin} />}
+                        {activeTab === 'reviews' && <ReviewsTab reviews={reviews} setReviews={setReviews} isAdmin={isAdmin} inviteCodes={inviteCodes} setInviteCodes={setInviteCodes} />}
+                    </main>
+
+                    <div onClick={handleSecretClick} className="fixed bottom-0 left-0 w-20 h-20 z-50 cursor-default opacity-0"></div>
+
+                    {showAuth && !isAdmin && (
+                        <LoginModal onSuccess={() => { setIsAdmin(true); setShowAuth(false); }} onCancel={() => setShowAuth(false)} />
+                    )}
+                </div>
+            );
+        }
+
+        function LoginModal({ onSuccess, onCancel }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (email === 'jgeralcik@gmail.com' && password === '1234321') {
+                    onSuccess();
+                } else {
+                    setError('Invalid credentials.');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                    <div className="glass p-8 rounded-xl w-full max-w-md border border-gray-700">
+                        <h2 className="text-2xl font-bold mb-6 text-accent">Admin Login</h2>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Email</label>
+                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Password</label>
+                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" required />
+                            </div>
+                            {error && <p className="text-red-500 text-sm font-bold">{error}</p>}
+                            <div className="flex gap-4 pt-4">
+                                <button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Login</button>
+                                <button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function AboutMe() {
+            return (
+                <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
+                    <h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">About Me</h2>
+                    <div className="glass p-8 rounded-xl">
+                        <h3 className="text-2xl font-bold text-accent mb-4">Hello, I'm MeowL</h3>
+                        <p className="text-gray-300 text-lg leading-relaxed mb-4">
+                            I am a Junior Polish Game Translator focusing on video games and game-development communities. With a proper word keys, context and details, I ensure that your game feels native and natural to Polish players.
+                        </p>
+                        <p className="text-gray-300 text-lg leading-relaxed">
+                            I help developers reach the Polish gaming market with high-quality, natural-sounding translations tailored to the context of their games.
+                        </p>
+                        <div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2">
+                            <p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p>
+                            <p><strong className="text-white">Role:</strong> Polish Game Translator / Localization Junior</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function PortfolioTab({ projects, setProjects, reviews, isAdmin }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editingProject, setEditingProject] = useState(null);
+
+            const openForm = (proj = null) => {
+                setEditingProject(proj);
+                setShowModal(true);
+            };
+
+            const deleteProject = (id) => {
+                if(confirm("Delete this project?")) setProjects(projects.filter(p => p.id !== id));
+            };
+
+            return (
+                <div className="animate-fade-in relative">
+                    <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+                        <h2 className="text-4xl font-extrabold text-white">Portfolio</h2>
+                        {isAdmin && (
+                            <button onClick={() => openForm()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2">
+                                <span className="text-xl">+</span> Add Project
+                            </button>
+                        )}
+                    </div>
+
+                    {projects.length === 0 ? (
+                        <p className="text-gray-500 text-xl text-center mt-12">No projects added yet.</p>
+                    ) : (
+                        <div className="space-y-12">
+                            {projects.map(proj => {
+                                const appId = getSteamAppId(proj.steamLink);
+                                const bannerUrl = appId ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg` : null;
+                                const logoUrl = appId ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png` : null;
+
+                                return (
+                                    <div key={proj.id} className="glass rounded-xl overflow-hidden shadow-2xl border border-gray-700 relative">
+                                        {bannerUrl && (
+                                            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{ backgroundImage: `url(${bannerUrl})` }}>
+                                                <div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div>
+                                            </div>
+                                        )}
+                                        <div className="p-8 relative z-10">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="flex items-center gap-4">
+                                                    {logoUrl && (
+                                                        <img src={logoUrl} alt="Game Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={(e)=>{e.target.style.display='none'}} />
+                                                    )}
+                                                    <div>
+                                                        <h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>
+                                                        <a href={proj.steamLink} target="_blank" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">
+                                                            🔗 Steam Store Page
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                                {isAdmin && (
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => openForm(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button>
+                                                        <button onClick={() => deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">
+                                                {proj.details}
+                                            </div>
+                                        </div>
+
+                                        {proj.pinnedReviews && proj.pinnedReviews.length > 0 && (
+                                            <PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews} />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {showModal && (
+                        <ProjectFormModal 
+                            project={editingProject} 
+                            reviews={reviews} 
+                            onSave={(data) => {
+                                if (editingProject) setProjects(projects.map(p => p.id === editingProject.id ? data : p));
+                                else setProjects([{...data, id: Date.now()}, ...projects]);
+                                setShowModal(false);
+                            }}
+                            onCancel={() => setShowModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function PinnedReviewsSection({ pinnedReviewIds, reviews }) {
+            const containerRef = React.useRef(null);
+            const [shouldScroll, setShouldScroll] = useState(false);
+
+            const pinnedReviewsList = pinnedReviewIds.map(id => reviews.find(r => r.id === id)).filter(Boolean);
+
+            useEffect(() => {
+                const checkOverflow = () => {
+                    if (containerRef.current) {
+                        const contentWidth = containerRef.current.scrollWidth;
+                        const containerWidth = containerRef.current.clientWidth;
+                        setShouldScroll(contentWidth > containerWidth);
+                    }
+                };
+                checkOverflow();
+                window.addEventListener('resize', checkOverflow);
+                return () => window.removeEventListener('resize', checkOverflow);
+            }, [pinnedReviewsList]);
+
+            if (pinnedReviewsList.length === 0) return null;
+
+            const renderReviewCard = (rev, idx) => {
+                const avgRating = calculateAverageRating(rev.ratings);
+                return (
+                    <div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                                <img src={rev.pfp} className="w-8 h-8 rounded-full border border-gray-600 object-cover" />
+                                <div>
+                                    <p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p>
+                                    <p className="text-xs text-accent">{rev.role}</p>
+                                </div>
+                            </div>
+                            {rev.ratings && rev.ratings.length > 0 && (
+                                <div className="text-right">
+                                    <div className="text-xs font-mono font-bold text-yellow-400">{avgRating} / 5</div>
+                                    <div className="scale-75 origin-right">{renderStars(avgRating)}</div>
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-300 italic line-clamp-2">"{rev.text}"</p>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Related Reviews</p>
+                    <div ref={containerRef} className="w-full overflow-hidden">
+                        {shouldScroll ? (
+                            <div className="marquee-container animate-scroll">
+                                {[...pinnedReviewsList, ...pinnedReviewsList].map((rev, idx) => renderReviewCard(rev, idx))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2 justify-start">
+                                {pinnedReviewsList.map((rev, idx) => renderReviewCard(rev, idx))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function ReviewsTab({ reviews, setReviews, isAdmin, inviteCodes, setInviteCodes }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editingReview, setEditingReview] = useState(null);
+            
+            const [showCodeInput, setShowCodeInput] = useState(false);
+            const [codeInput, setCodeInput] = useState('');
+            const [isGuestFormOpen, setIsGuestFormOpen] = useState(false);
+            const [guestPreloadData, setGuestPreloadData] = useState(null);
+
+            const [showGenModal, setShowGenModal] = useState(false);
+            const [genData, setGenData] = useState({
+                nickname: '',
+                role: '',
+                pfp: 'https://ui-avatars.com/api/?name=User&background=333&color=fff'
+            });
+
+            const openForm = (rev = null) => {
+                setEditingReview(rev);
+                setShowModal(true);
+            };
+
+            const deleteReview = (id) => {
+                if(confirm("Delete this review?")) setReviews(reviews.filter(r => r.id !== id));
+            };
+
+            const togglePublish = (id) => {
+                setReviews(reviews.map(r => r.id === id ? { ...r, published: !r.published } : r));
+            };
+
+            const handleGenImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setGenData({ ...genData, pfp: reader.result });
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleCreateCode = (e) => {
+                e.preventDefault();
+                if (!genData.nickname || !genData.role) return alert("Nickname and Role are required.");
+                const codeString = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const newCodeObj = {
+                    code: codeString,
+                    nickname: genData.nickname,
+                    role: genData.role,
+                    pfp: genData.pfp
+                };
+                setInviteCodes([...inviteCodes, newCodeObj]);
+                setShowGenModal(false);
+                setGenData({ nickname: '', role: '', pfp: 'https://ui-avatars.com/api/?name=User&background=333&color=fff' });
+            };
+
+            const handleCodeSubmit = (e) => {
+                e.preventDefault();
+                const found = inviteCodes.find(c => c.code === codeInput);
+                if(found) {
+                    setInviteCodes(inviteCodes.filter(c => c.code !== codeInput));
+                    setShowCodeInput(false);
+                    setCodeInput('');
+                    setGuestPreloadData(found);
+                    setIsGuestFormOpen(true);
+                } else {
+                    alert("Invalid or used code.");
+                }
+            };
+
+            const displayReviews = isAdmin ? reviews : reviews.filter(r => r.published);
+
+            return (
+                <div className="animate-fade-in relative">
+                    <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+                        <h2 className="text-4xl font-extrabold text-white">Reviews & Testimonials</h2>
+                        
+                        {isAdmin && (
+                            <div className="flex gap-4 items-center">
+                                <button onClick={() => setShowGenModal(true)} className="bg-purple-900/50 hover:bg-purple-800 text-purple-400 border border-purple-800 px-4 py-2 rounded font-bold text-sm transition-colors">
+                                    Generate Invite Code
+                                </button>
+                                <button onClick={() => openForm()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2">
+                                    <span className="text-xl">+</span> Add Review
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {isAdmin && inviteCodes.length > 0 && (
+                        <div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg">
+                            <p className="text-sm font-bold text-gray-400 mb-3">Active Invite Codes (One-time use):</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {inviteCodes.map(item => (
+                                    <div key={item.code} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <img src={item.pfp} className="w-8 h-8 rounded-full object-cover border border-gray-600" />
+                                            <div>
+                                                <p className="text-xs font-bold text-white">{item.nickname}</p>
+                                                <p className="text-[10px] text-accent">{item.role}</p>
+                                            </div>
+                                        </div>
+                                        <span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {!isAdmin && (
+                        <div className="text-right mb-6">
+                            <button onClick={() => setShowCodeInput(true)} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">
+                                Have an invite code?
+                            </button>
+                        </div>
+                    )}
+
+                    {displayReviews.length === 0 ? (
+                        <p className="text-gray-500 text-xl text-center mt-12">No reviews available.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {displayReviews.map(review => {
+                                const avgRating = calculateAverageRating(review.ratings);
+                                return (
+                                    <div key={review.id} className={`glass rounded-xl p-6 shadow-xl flex flex-col ${!review.published && isAdmin ? 'opacity-50 grayscale border-dashed' : ''}`}>
+                                        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4">
+                                            <div className="flex items-center gap-4">
+                                                <img src={review.pfp} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" />
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3>
+                                                    <p className="text-xs text-accent font-semibold">{review.role}</p>
+                                                    <p className="text-[10px] text-gray-500 mt-1">{formatDate(review.date)}</p>
+                                                </div>
+                                            </div>
+                                            {review.ratings && review.ratings.length > 0 && (
+                                                <div className="text-right">
+                                                    <div className="text-sm font-mono font-bold text-yellow-400">{avgRating} / 5</div>
+                                                    {renderStars(avgRating)}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-gray-300 text-sm italic flex-grow mb-6">"{review.text}"</p>
+                                        
+                                        {review.ratings && review.ratings.length > 0 && (
+                                            <div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">
+                                                {review.ratings.map((rating, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center">
+                                                        <span className="text-xs font-semibold text-gray-400">{rating.category}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-yellow-400 text-xs font-mono">{rating.value}</span>
+                                                            {renderStars(rating.value)}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        
+                                        {isAdmin && (
+                                            <div className="flex gap-2 mt-auto border-t border-gray-700 pt-4">
+                                                <button onClick={() => togglePublish(review.id)} className={`flex-1 text-xs py-1 rounded font-bold ${review.published ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+                                                    {review.published ? 'Published' : 'Hidden'}
+                                                </button>
+                                                <button onClick={() => openForm(review)} className="flex-1 bg-blue-900/50 text-blue-400 rounded text-xs font-bold py-1">Edit</button>
+                                                <button onClick={() => deleteReview(review.id)} className="flex-1 bg-red-900/50 text-red-400 rounded text-xs font-bold py-1">Delete</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {showGenModal && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                            <div className="glass p-6 rounded-xl border border-gray-700 max-w-md w-full">
+                                <h3 className="text-xl font-bold text-accent mb-4">Generate Invite Code Data</h3>
+                                <form onSubmit={handleCreateCode} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-400 mb-1">Avatar (Upload Image)</label>
+                                        <input type="file" accept="image/*" onChange={handleGenImageUpload} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm" />
+                                        {genData.pfp && <img src={genData.pfp} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" />}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-400 mb-1">Nickname</label>
+                                        <input type="text" value={genData.nickname} onChange={e => setGenData({...genData, nickname: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-400 mb-1">Role (e.g. Developer)</label>
+                                        <input type="text" value={genData.role} onChange={e => setGenData({...genData, role: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" required />
+                                    </div>
+                                    <div className="flex gap-4 pt-2">
+                                        <button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Generate Code</button>
+                                        <button type="button" onClick={() => setShowGenModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {showCodeInput && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                            <div className="glass p-6 rounded-xl border border-gray-700 max-w-sm w-full">
+                                <h3 className="text-xl font-bold text-accent mb-4">Enter Invite Code</h3>
+                                <form onSubmit={handleCodeSubmit} className="flex gap-2">
+                                    <input type="text" value={codeInput} onChange={e => setCodeInput(e.target.value.toUpperCase())} className="flex-1 bg-gray-900 border border-gray-700 rounded p-2 text-white font-mono font-bold" placeholder="CODE" required />
+                                    <button type="submit" className="bg-accent hover:bg-cyan-400 text-darker font-bold px-4 py-2 rounded">Verify</button>
+                                </form>
+                                <button onClick={() => setShowCodeInput(false)} className="w-full mt-4 text-sm text-gray-500 hover:text-white font-bold">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {showModal && (
+                        <ReviewFormModal 
+                            review={editingReview} 
+                            isAdmin={true}
+                            onSave={(data) => {
+                                const finalData = { ...data, date: data.date || new Date().toISOString() };
+                                if (editingReview) setReviews(reviews.map(r => r.id === editingReview.id ? finalData : r));
+                                else setReviews([{...finalData, id: Date.now()}, ...reviews]);
+                                setShowModal(false);
+                            }}
+                            onCancel={() => setShowModal(false)}
+                        />
+                    )}
+
+                    {isGuestFormOpen && (
+                        <ReviewFormModal 
+                            isAdmin={false}
+                            preloadData={guestPreloadData}
+                            onSave={(data) => {
+                                const finalData = { ...data, date: new Date().toISOString(), published: false };
+                                setReviews([{...finalData, id: Date.now()}, ...reviews]);
+                                setIsGuestFormOpen(false);
+                                alert("Review submitted! Waiting for admin approval.");
+                            }}
+                            onCancel={() => setIsGuestFormOpen(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function ProjectFormModal({ project, reviews, onSave, onCancel }) {
+            const [formData, setFormData] = useState(project || {
+                title: '', steamLink: '', details: '', pinnedReviews: []
+            });
+
+            const togglePin = (revId) => {
+                const updated = formData.pinnedReviews.includes(revId) 
+                    ? formData.pinnedReviews.filter(id => id !== revId)
+                    : [...formData.pinnedReviews, revId];
+                setFormData({...formData, pinnedReviews: updated});
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if(!formData.title) return alert("Title is required.");
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8">
+                        <h2 className="text-2xl font-bold mb-6 text-accent">{project ? 'Edit Project' : 'New Project'}</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Game Title</label>
+                                <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Steam URL</label>
+                                <input type="url" value={formData.steamLink} onChange={e => setFormData({...formData, steamLink: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" placeholder="https://store.steampowered.com/app/..." required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Translation Details</label>
+                                <textarea value={formData.details} onChange={e => setFormData({...formData, details: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white h-32"></textarea>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-bold text-accent mb-2">Pin Reviews to this Project</label>
+                                <div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">
+                                    {reviews.length === 0 && <p className="text-xs text-gray-500">No reviews available to pin.</p>}
+                                    {reviews.map(rev => (
+                                        <label key={rev.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-800 rounded">
+                                            <input type="checkbox" checked={formData.pinnedReviews.includes(rev.id)} onChange={() => togglePin(rev.id)} className="w-4 h-4 accent-accent" />
+                                            <img src={rev.pfp} className="w-6 h-6 rounded-full object-cover" />
+                                            <span className="text-sm font-bold text-white">{rev.nickname}</span>
+                                            <span className="text-xs text-gray-500 truncate max-w-[200px]">"{rev.text}"</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-4 border-t border-gray-700">
+                                <button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Save Project</button>
+                                <button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function ReviewFormModal({ review, isAdmin, preloadData, onSave, onCancel }) {
+            const emptyForm = review || {
+                pfp: preloadData ? preloadData.pfp : "https://ui-avatars.com/api/?name=New+User&background=333&color=fff",
+                nickname: preloadData ? preloadData.nickname : "",
+                discord: "",
+                role: preloadData ? preloadData.role : "",
+                text: "",
+                ratings: defaultCategories.map(c => ({ ...c })),
+                published: isAdmin ? true : false,
+                date: new Date().toISOString()
+            };
+            
+            const [formData, setFormData] = useState(emptyForm);
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setFormData({ ...formData, pfp: reader.result });
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const updateRating = (index, value) => {
+                const newRatings = [...formData.ratings];
+                newRatings[index].value = value;
+                setFormData({ ...formData, ratings: newRatings });
+            };
+
+            const removeRatingCategory = (index) => {
+                const newRatings = formData.ratings.filter((_, idx) => idx !== index);
+                setFormData({ ...formData, ratings: newRatings });
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!formData.nickname || !formData.text) return alert("Nickname and Text required.");
+                onSave(formData);
+            };
+
+            const avgRating = calculateAverageRating(formData.ratings);
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8">
+                        <h2 className="text-2xl font-bold mb-6 text-accent">{review ? 'Edit Review' : 'Submit Review'}</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-400 mb-1">Avatar {preloadData && '(From Code)'}</label>
+                                    {isAdmin && (
+                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm mb-2" />
+                                    )}
+                                    {formData.pfp && <img src={formData.pfp} className="w-10 h-10 rounded-full border border-gray-600 object-cover" />}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-400 mb-1">Nickname</label>
+                                    <input type="text" value={formData.nickname} readOnly={preloadData} onChange={e => setFormData({...formData, nickname: e.target.value})} className={`w-full bg-gray-900 border border-gray-700 rounded p-2 text-white ${preloadData ? 'opacity-60 cursor-not-allowed' : ''}`} required />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-400 mb-1">Discord Username</label>
+                                    <input type="text" value={formData.discord} onChange={e => setFormData({...formData, discord: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-400 mb-1">Role</label>
+                                    <input type="text" value={formData.role} readOnly={preloadData} onChange={e => setFormData({...formData, role: e.target.value})} className={`w-full bg-gray-900 border border-gray-700 rounded p-2 text-white ${preloadData ? 'opacity-60 cursor-not-allowed' : ''}`} required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-400 mb-1">Review Text</label>
+                                <textarea value={formData.text} onChange={e => setFormData({...formData, text: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white h-24" required></textarea>
+                            </div>
+
+                            <div className="p-4 bg-gray-900 rounded border border-gray-700">
+                                <div className="flex justify-between items-center mb-3">
+                                    <label className="text-sm font-bold text-accent">Ratings (Average: {avgRating} / 5)</label>
+                                </div>
+                                {formData.ratings.length === 0 ? (
+                                    <p className="text-xs text-gray-500 italic">No ratings added.</p>
+                                ) : (
+                                    formData.ratings.map((rating, idx) => (
+                                        <div key={idx} className="flex items-center justify-between gap-3 mb-2">
+                                            <span className="font-bold text-gray-400 text-xs w-1/3">{rating.category}</span>
+                                            <input type="range" min="0" max="5" step="0.5" value={rating.value} onChange={e => updateRating(idx, parseFloat(e.target.value))} className="w-1/2 accent-accent" />
+                                            <div className="flex items-center gap-2 w-24 justify-end">
+                                                <span className="text-yellow-400 font-mono text-xs">{rating.value}</span>
+                                                {renderStars(rating.value)}
+                                            </div>
+                                            <button type="button" onClick={() => removeRatingCategory(idx)} className="text-red-500 hover:text-red-400 font-bold text-xs px-2 py-1 bg-red-950/40 border border-red-900/50 rounded" title="Usuń jeśli nie dotyczy">✕</button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-700">
+                                {isAdmin ? (
+                                    <label className="flex items-center gap-2 cursor-pointer text-white font-bold text-sm">
+                                        <input type="checkbox" checked={formData.published} onChange={e => setFormData({...formData, published: e.target.checked})} className="w-4 h-4 accent-accent rounded" />
+                                        Publish immediately
+                                    </label>
+                                ) : (
+                                    <span className="text-xs text-gray-500 font-bold">Review will require admin approval.</span>
+                                )}
+                                
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={onCancel} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm">Cancel</button>
+                                    <button type="submit" className="bg-accent hover:bg-cyan-400 text-darker font-bold py-2 px-6 rounded text-sm">Submit</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
