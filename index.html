@@ -11,27 +11,8 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Loader Supabase z dzialającymi CDN-ami -->
-    <script>
-        (function loadSupabase() {
-            const cdns = [
-                'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
-                'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
-            ];
-            let index = 0;
-            function tryNext() {
-                if (index >= cdns.length) {
-                    window.__supabaseLoadFailed = true;
-                    return;
-                }
-                const script = document.createElement('script');
-                script.src = cdns[index++];
-                script.onerror = tryNext;
-                document.head.appendChild(script);
-            }
-            tryNext();
-        })();
-    </script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
         tailwind.config = {
@@ -71,8 +52,7 @@ const { useState, useEffect, useMemo } = React;
 const SUPABASE_URL = 'https://empvklffqwrlllovhgzx.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_an1FqOGAgwRQCzxp6UWuvQ_TFadZ9EW';
 
-let supabase = null;
-let supabaseInitError = '';
+let supabaseClient = null;
 
 const REMEMBER_KEY = 'm3owl_remember_session';
 if (localStorage.getItem(REMEMBER_KEY) === null) localStorage.setItem(REMEMBER_KEY, 'true');
@@ -93,15 +73,15 @@ const authStorage = {
     }
 };
 
-function initSupabaseClient() {
+function getSupabase() {
+    if (supabaseClient) return supabaseClient;
     if (window.supabase && typeof window.supabase.createClient === 'function') {
         try {
-            const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
                 auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authStorage }
             });
-            if (client && client.auth) return client;
+            return supabaseClient;
         } catch (e) {
-            supabaseInitError = 'Błąd inicjalizacji klienta Supabase.';
             return null;
         }
     }
@@ -199,8 +179,9 @@ function App() {
     const [toast,setToast] = useState('');
 
     const loadReviews = async (adminView=isAdmin) => {
-        if (!supabase) return;
-        let query = supabase.from('reviews').select('*').order('created_at',{ascending:false});
+        const client = getSupabase();
+        if (!client) return;
+        let query = client.from('reviews').select('*').order('created_at',{ascending:false});
         if (!adminView) query = query.eq('published',true);
         const {data,error} = await query;
         if (error) { handleNetworkError(error); return; }
@@ -208,33 +189,36 @@ function App() {
     };
 
     const loadProjects = async () => {
-        if (!supabase) return;
-        const {data,error} = await supabase.from('projects').select('*').order('created_at',{ascending:false});
+        const client = getSupabase();
+        if (!client) return;
+        const {data,error} = await client.from('projects').select('*').order('created_at',{ascending:false});
         if (error) { handleNetworkError(error); return; }
         setProjects((data || []).map(normalizeProject));
     };
 
     const loadInviteCodes = async () => {
-        if (!supabase || !isAdmin) return;
-        const {data,error} = await supabase.from('invite_codes').select('*').eq('used',false).order('created_at',{ascending:false});
+        const client = getSupabase();
+        if (!client || !isAdmin) return;
+        const {data,error} = await client.from('invite_codes').select('*').eq('used',false).order('created_at',{ascending:false});
         if (error) { handleNetworkError(error); return; }
         setInviteCodes((data || []).map(normalizeCode));
     };
 
     const handleNetworkError = (err) => {
         if (err && (err.message?.includes('Failed to fetch') || err.status === 0)) {
-            setError('AdBlock lub rozszerzenie prywatności blokuje połączenie z bazą danych Supabase. Wyłącz bloker dla tej strony.');
+            setError('Rozszerzenie prywatności blokuje połączenie z bazą danych Supabase. Wyłącz bloker dla tej strony.');
         } else if (err) {
             setError(err.message);
         }
     };
 
     const checkAdmin = async (currentSession) => {
-        if (!supabase || !currentSession || !currentSession.user) {
+        const client = getSupabase();
+        if (!client || !currentSession || !currentSession.user) {
             setIsAdmin(false);
             return false;
         }
-        const {data,error} = await supabase.from('admin_users').select('user_id').eq('user_id',currentSession.user.id).maybeSingle();
+        const {data,error} = await client.from('admin_users').select('user_id').eq('user_id',currentSession.user.id).maybeSingle();
         const ok = !error && !!data;
         setIsAdmin(ok);
         return ok;
@@ -244,12 +228,12 @@ function App() {
         let attempts = 0;
         const checkLibrary = setInterval(async () => {
             attempts++;
-            if (!supabase) supabase = initSupabaseClient();
+            const client = getSupabase();
 
-            if (supabase && supabase.auth) {
+            if (client && client.auth) {
                 clearInterval(checkLibrary);
                 try {
-                    const {data:{session:currentSession}} = await supabase.auth.getSession();
+                    const {data:{session:currentSession}} = await client.auth.getSession();
                     setSession(currentSession);
                     const admin = await checkAdmin(currentSession);
                     await Promise.all([loadReviews(admin), loadProjects()]);
@@ -260,10 +244,11 @@ function App() {
                     setLoading(false);
                 }
 
-                supabase.channel('m3owl-live')
+                client.channel('m3owl-live')
                     .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},async () => {
-                        if (supabase?.auth) {
-                            const {data:{session:currentSession}} = await supabase.auth.getSession();
+                        const c = getSupabase();
+                        if (c?.auth) {
+                            const {data:{session:currentSession}} = await c.auth.getSession();
                             const admin = await checkAdmin(currentSession);
                             await loadReviews(admin);
                         }
@@ -272,9 +257,9 @@ function App() {
                     .on('postgres_changes',{event:'*',schema:'public',table:'invite_codes'},loadInviteCodes)
                     .subscribe();
 
-            } else if (window.__supabaseLoadFailed || attempts > 15) {
+            } else if (attempts > 50) {
                 clearInterval(checkLibrary);
-                setError('AdBlock zablokował ładowanie biblioteki Supabase z serwerów CDN. Wyłącz bloker reklam i odśwież stronę.');
+                setError('Nie udało się załadować biblioteki Supabase z serwera CDN. Sprawdź połączenie z siecią.');
                 setLoading(false);
             }
         }, 200);
@@ -289,26 +274,28 @@ function App() {
     },[toast]);
 
     const logout = async () => {
-        if (supabase) await supabase.auth.signOut();
+        const client = getSupabase();
+        if (client) await client.auth.signOut();
         setSession(null);
         setIsAdmin(false);
         setInviteCodes([]);
         setActiveTab('reviews');
-        setToast('Logged out.');
+        setToast('Wylogowano.');
     };
 
     const handleLoginSuccess = async (newSession) => {
+        const client = getSupabase();
         setSession(newSession);
         const admin = await checkAdmin(newSession);
         if (!admin) {
-            await supabase.auth.signOut();
-            setError('This account is not an admin.');
+            if (client) await client.auth.signOut();
+            setError('To konto nie ma uprawnień administratora.');
             return;
         }
         await Promise.all([loadReviews(true),loadProjects(),loadInviteCodes()]);
         setShowAuth(false);
         setActiveTab('admin');
-        setToast('Logged in.');
+        setToast('Zalogowano pomyślnie.');
     };
 
     return (
@@ -319,19 +306,19 @@ function App() {
                     <p className="text-sm text-gray-400">Jakub K. | Discord: <span className="text-white font-mono">_m3owl</span> | Junior Polish Game Translator</p>
                 </div>
                 <nav className="flex gap-6 font-bold">
-                    <button onClick={()=>setActiveTab('about')} className={`transition-colors ${activeTab==='about'?'text-accent':'text-gray-400 hover:text-white'}`}>About Me</button>
+                    <button onClick={()=>setActiveTab('about')} className={`transition-colors ${activeTab==='about'?'text-accent':'text-gray-400 hover:text-white'}`}>O mnie</button>
                     <button onClick={()=>setActiveTab('portfolio')} className={`transition-colors ${activeTab==='portfolio'?'text-accent':'text-gray-400 hover:text-white'}`}>Portfolio</button>
-                    <button onClick={()=>setActiveTab('reviews')} className={`transition-colors ${activeTab==='reviews'?'text-accent':'text-gray-400 hover:text-white'}`}>Reviews</button>
-                    {isAdmin && <button onClick={()=>setActiveTab('admin')} className={`transition-colors ${activeTab==='admin'?'text-accent':'text-gray-400 hover:text-white'}`}>Admin Panel</button>}
+                    <button onClick={()=>setActiveTab('reviews')} className={`transition-colors ${activeTab==='reviews'?'text-accent':'text-gray-400 hover:text-white'}`}>Opinie</button>
+                    {isAdmin && <button onClick={()=>setActiveTab('admin')} className={`transition-colors ${activeTab==='admin'?'text-accent':'text-gray-400 hover:text-white'}`}>Panel Admina</button>}
                     {isAdmin && (
-                        <button onClick={logout} className="bg-red-900/80 hover:bg-red-800 text-white px-4 py-2 rounded border border-red-600 transition-colors font-bold text-sm">Logout (Admin)</button>
+                        <button onClick={logout} className="bg-red-900/80 hover:bg-red-800 text-white px-4 py-2 rounded border border-red-600 transition-colors font-bold text-sm">Wyloguj (Admin)</button>
                     )}
                 </nav>
             </header>
 
             <main className="flex-grow p-8 max-w-7xl mx-auto w-full relative">
-                {error && <div className="mb-8 p-4 rounded-xl border border-red-500/50 bg-red-950/40 text-red-200 text-sm flex justify-between items-center"><span>⚠️ <b>Problem z połączeniem:</b> {error}</span><button className="text-lg font-bold ml-4" onClick={()=>setError('')}>×</button></div>}
-                {loading ? <div className="py-24 text-center text-gray-500">Łączenie z usługą...</div> : <>
+                {error && <div className="mb-8 p-4 rounded-xl border border-red-500/50 bg-red-950/40 text-red-200 text-sm flex justify-between items-center"><span>⚠️ <b>Problem:</b> {error}</span><button className="text-lg font-bold ml-4" onClick={()=>setError('')}>×</button></div>}
+                {loading ? <div className="py-24 text-center text-gray-500 font-bold">Łączenie z bazą danych...</div> : <>
                     {activeTab==='about' && <AboutMe />}
                     {activeTab==='portfolio' && <PortfolioTab projects={projects} setProjects={setProjects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} />}
                     {activeTab==='reviews' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} />}
@@ -339,7 +326,7 @@ function App() {
                 </>}
             </main>
 
-            <footer className="max-w-7xl mx-auto w-full px-8 pb-8 text-xs text-gray-600">M3owL · Polish Game Translator · _m3owl</footer>
+            <footer className="max-w-7xl mx-auto w-full px-8 pb-8 text-xs text-gray-600 font-bold">M3owL · Polish Game Translator · _m3owl</footer>
             <div
                 aria-hidden="true"
                 onClick={() => {
@@ -354,7 +341,7 @@ function App() {
                 className="fixed bottom-0 left-0 w-7 h-7 z-[9999] opacity-0 cursor-default"
             />
             {showAuth && <LoginModal onSuccess={handleLoginSuccess} onCancel={()=>setShowAuth(false)} />}
-            {toast && <div className="fixed bottom-5 right-5 z-[200] glass rounded-xl px-4 py-3 text-sm font-bold text-gray-200 shadow-2xl">{toast}</div>}
+            {toast && <div className="fixed bottom-5 right-5 z-[200] glass rounded-xl px-4 py-3 text-sm font-bold text-gray-200 shadow-2xl border border-gray-700">{toast}</div>}
         </div>
     );
 }
@@ -367,7 +354,8 @@ function LoginModal({onSuccess,onCancel}) {
     const [busy,setBusy]=useState(false);
     const login=async(e)=>{
         e.preventDefault();
-        if(!supabase)return setError('Brak połączenia z bazą.');
+        const client = getSupabase();
+        if(!client)return setError('Brak połączenia z bazą.');
         setBusy(true);setError('');
         localStorage.setItem(REMEMBER_KEY, remember ? 'true' : 'false');
         if(!remember){
@@ -375,24 +363,24 @@ function LoginModal({onSuccess,onCancel}) {
                 localStorage.removeItem('sb-'+new URL(SUPABASE_URL).hostname.split('.')[0]+'-auth-token');
             } catch(e) {}
         }
-        const {data,error:loginError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
+        const {data,error:loginError}=await client.auth.signInWithPassword({email:email.trim(),password});
         setBusy(false);
         if(loginError)return setError(loginError.message);
-        if(!data || !data.session)return setError('Login succeeded but no session was returned.');
+        if(!data || !data.session)return setError('Zalogowano, ale brak sesji.');
         onSuccess(data.session);
     };
     return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4">
         <div className="glass p-8 rounded-xl w-full max-w-md border border-gray-700">
-            <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">Admin Login</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">Admin Login</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div>
             <form onSubmit={login} className="space-y-4">
                 <Field label="Email"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="form-input" required /></Field>
-                <Field label="Password"><input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="form-input" required /></Field>
-                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+                <Field label="Hasło"><input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="form-input" required /></Field>
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none font-bold">
                     <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} className="w-4 h-4 accent-accent" />
-                    Remember me on this device
+                    Zapamiętaj mnie
                 </label>
                 {error && <p className="text-red-400 text-sm font-bold">{error}</p>}
-                <div className="flex gap-4 pt-2"><button disabled={busy} type="submit" className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Logging in…':'Login'}</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button></div>
+                <div className="flex gap-4 pt-2"><button disabled={busy} type="submit" className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Logowanie…':'Zaloguj'}</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Anuluj</button></div>
             </form>
         </div>
     </div>;
@@ -400,12 +388,12 @@ function LoginModal({onSuccess,onCancel}) {
 
 function AboutMe(){
     return <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
-        <h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">About Me</h2>
+        <h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">O mnie</h2>
         <div className="glass p-8 rounded-xl">
-            <h3 className="text-2xl font-bold text-accent mb-4">Hello, I'm MeowL</h3>
-            <p className="text-gray-300 text-lg leading-relaxed mb-4">I am a Junior Polish Game Translator focusing on video games and game-development communities. With a proper word keys, context and details, I ensure that your game feels native and natural to Polish players.</p>
-            <p className="text-gray-300 text-lg leading-relaxed">I help developers reach the Polish gaming market with high-quality, natural-sounding translations tailored to the context of their games.</p>
-            <div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2"><p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p><p><strong className="text-white">Role:</strong> Polish Game Translator / Localization Junior</p></div>
+            <h3 className="text-2xl font-bold text-accent mb-4">Cześć, tu MeowL</h3>
+            <p className="text-gray-300 text-lg leading-relaxed mb-4">Jestem Junior Polish Game Translatorem. Tłumaczę gry wideo i pomagam deweloperom dopasować ich produkcje do polskich graczy. Skupiam się na naturalnym brzmieniu i oddaniu odpowiedniego klimatu.</p>
+            <p className="text-gray-300 text-lg leading-relaxed">Jeżeli potrzebujesz tłumaczenia, które nie brzmi jak z generatora, dobrze trafiłeś.</p>
+            <div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2"><p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p><p><strong className="text-white">Stanowisko:</strong> Polish Game Translator / Localization Junior</p></div>
         </div>
     </div>;
 }
@@ -415,29 +403,31 @@ function PortfolioTab({projects,setProjects,reviews,isAdmin,onChanged,onError}) 
     const [editingProject,setEditingProject]=useState(null);
     const openForm=(p=null)=>{setEditingProject(p);setShowModal(true);};
     const saveProject=async(data)=>{
-        if(!supabase)return;
+        const client = getSupabase();
+        if(!client)return;
         const payload={title:data.title.trim(),steam_url:data.steamLink ? data.steamLink.trim() : null,details:data.details||'',pinned_reviews:data.pinnedReviews||[]};
-        const result=editingProject ? await supabase.from('projects').update(payload).eq('id',editingProject.id) : await supabase.from('projects').insert(payload);
+        const result=editingProject ? await client.from('projects').update(payload).eq('id',editingProject.id) : await client.from('projects').insert(payload);
         if(result.error){onError(result.error.message);return;}
         await onChanged();setShowModal(false);setEditingProject(null);
     };
     const deleteProject=async(id)=>{
-        if(!confirm('Delete this project?'))return;
-        const {error}=await supabase.from('projects').delete().eq('id',id);
+        if(!confirm('Usunąć ten projekt?'))return;
+        const client = getSupabase();
+        const {error}=await client.from('projects').delete().eq('id',id);
         if(error)return onError(error.message);
         await onChanged();
     };
     return <div className="animate-fade-in relative">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Portfolio</h2>{isAdmin&&<button onClick={()=>openForm()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
-        {projects.length===0?<p className="text-gray-500 text-xl text-center mt-12">No projects added yet.</p>:<div className="space-y-12">{projects.map(proj=>{
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Portfolio</h2>{isAdmin&&<button onClick={()=>openForm()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Dodaj Projekt</button>}</div>
+        {projects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">Brak dodanych projektów.</p>:<div className="space-y-12">{projects.map(proj=>{
             const appId=getSteamAppId(proj.steamLink);
             const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
             const logoUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;
             return <div key={proj.id} className="glass rounded-xl overflow-hidden shadow-2xl border border-gray-700 relative">
                 {bannerUrl&&<div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${bannerUrl})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div></div>}
                 <div className="p-8 relative z-10">
-                    <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-4">{logoUrl&&<img src={logoUrl} alt="Game Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}<div><h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>{proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Steam Store Page</a>}</div></div>{isAdmin&&<div className="flex gap-2"><button onClick={()=>openForm(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button><button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button></div>}</div>
-                    <div className="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">{proj.details}</div>
+                    <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-4">{logoUrl&&<img src={logoUrl} alt="Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}<div><h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>{proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Strona Steam</a>}</div></div>{isAdmin&&<div className="flex gap-2"><button onClick={()=>openForm(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edytuj</button><button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Usuń</button></div>}</div>
+                    <div className="text-gray-300 font-medium leading-relaxed mb-6 whitespace-pre-wrap">{proj.details}</div>
                 </div>
                 {proj.pinnedReviews && proj.pinnedReviews.length>0&&<PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews}/>} 
             </div>;
@@ -455,27 +445,27 @@ function PinnedReviewsSection({pinnedReviewIds,reviews}){
         check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);
     },[pinnedReviewsList]);
     if(!pinnedReviewsList.length)return null;
-    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div><p className="text-xs text-gray-300 italic line-clamp-2">"{rev.text}"</p></div>;
-    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Related Reviews</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
+    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent font-bold">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div><p className="text-xs text-gray-300 italic font-medium line-clamp-2">"{rev.text}"</p></div>;
+    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Powiązane opinie</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
 }
 
 function ReviewsTab({reviews,isAdmin,onRefresh,onError,onToast}){
     const [showCodeInput,setShowCodeInput]=useState(false);
     const displayReviews=isAdmin?reviews:reviews.filter(r=>r.published);
     return <div className="animate-fade-in relative">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Reviews & Testimonials</h2>{!isAdmin&&<button onClick={()=>setShowCodeInput(true)} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">Have an invite code?</button>}</div>
-        {displayReviews.length===0?<p className="text-gray-500 text-xl text-center mt-12">No reviews available.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{displayReviews.map(review=><ReviewCard key={review.id} review={review} admin={isAdmin} onEdit={null} onDelete={null} onTogglePublish={null}/>)}</div>}
-        {showCodeInput&&<InviteCodeModal onClose={()=>setShowCodeInput(false)} onSubmitted={async()=>{setShowCodeInput(false);await onRefresh();onToast('Review submitted. Awaiting approval.')}} onError={onError}/>} 
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Opinie</h2>{!isAdmin&&<button onClick={()=>setShowCodeInput(true)} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">Mam kod zaproszenia</button>}</div>
+        {displayReviews.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">Brak opinii.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{displayReviews.map(review=><ReviewCard key={review.id} review={review} admin={isAdmin} onEdit={null} onDelete={null} onTogglePublish={null}/>)}</div>}
+        {showCodeInput&&<InviteCodeModal onClose={()=>setShowCodeInput(false)} onSubmitted={async()=>{setShowCodeInput(false);await onRefresh();onToast('Opinia wysłana. Oczekuje na akceptację.')}} onError={onError}/>} 
     </div>;
 }
 
 function ReviewCard({review,admin,onEdit,onDelete,onTogglePublish}){
     const average=calculateAverageRating(review.ratings);
     return <div className={`glass rounded-xl p-6 shadow-xl flex flex-col ${admin&&!review.published?'opacity-50 grayscale border-dashed':''}`}>
-        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4"><div className="flex items-center gap-4"><img src={review.pfp||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>{e.currentTarget.src=avatarFallback(review.nickname)}}/><div><h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3><p className="text-xs text-accent font-semibold">{review.role}</p>{review.discord&&<p className="text-[10px] text-gray-500 mt-1">{review.discord}</p>}<p className="text-[10px] text-gray-500 mt-1">{formatDate(review.date)}</p></div></div>{review.ratings && review.ratings.length>0&&<div className="text-right"><div className="text-sm font-mono font-bold text-yellow-400">{average.toFixed(1)} / 5</div>{renderStars(average)}</div>}</div>
-        <p className="text-gray-300 text-sm italic flex-grow mb-6">"{review.text}"</p>
-        {review.ratings && review.ratings.length>0&&<div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">{review.ratings.map((rating,idx)=><div key={idx} className="flex justify-between items-center"><span className="text-xs font-semibold text-gray-400">{rating.category}</span><div className="flex items-center gap-2"><span className="text-yellow-400 text-xs font-mono">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div></div>)}</div>}
-        {admin&&<div className="flex gap-2 mt-auto border-t border-gray-700 pt-4"><button onClick={()=>onTogglePublish(review.id,!review.published)} className={`flex-1 text-xs py-1 rounded font-bold ${review.published?'bg-green-900/50 text-green-400':'bg-gray-700 text-gray-400'}`}>{review.published?'Published':'Hidden'}</button><button onClick={()=>onEdit(review)} className="flex-1 bg-blue-900/50 text-blue-400 rounded text-xs font-bold py-1">Edit</button><button onClick={()=>onDelete(review.id)} className="flex-1 bg-red-900/50 text-red-400 rounded text-xs font-bold py-1">Delete</button></div>}
+        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4"><div className="flex items-center gap-4"><img src={review.pfp||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>{e.currentTarget.src=avatarFallback(review.nickname)}}/><div><h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3><p className="text-xs text-accent font-bold">{review.role}</p>{review.discord&&<p className="text-[10px] text-gray-500 mt-1 font-mono">{review.discord}</p>}<p className="text-[10px] text-gray-500 mt-1 font-bold">{formatDate(review.date)}</p></div></div>{review.ratings && review.ratings.length>0&&<div className="text-right"><div className="text-sm font-mono font-bold text-yellow-400">{average.toFixed(1)} / 5</div>{renderStars(average)}</div>}</div>
+        <p className="text-gray-300 text-sm italic font-medium flex-grow mb-6">"{review.text}"</p>
+        {review.ratings && review.ratings.length>0&&<div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">{review.ratings.map((rating,idx)=><div key={idx} className="flex justify-between items-center"><span className="text-xs font-bold text-gray-400">{rating.category}</span><div className="flex items-center gap-2"><span className="text-yellow-400 text-xs font-mono font-bold">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div></div>)}</div>}
+        {admin&&<div className="flex gap-2 mt-auto border-t border-gray-700 pt-4"><button onClick={()=>onTogglePublish(review.id,!review.published)} className={`flex-1 text-xs py-1 rounded font-bold ${review.published?'bg-green-900/50 text-green-400 border border-green-800':'bg-gray-700 text-gray-400 border border-gray-600'}`}>{review.published?'Opublikowano':'Ukryto'}</button><button onClick={()=>onEdit(review)} className="flex-1 bg-blue-900/50 text-blue-400 border border-blue-800 rounded text-xs font-bold py-1">Edytuj</button><button onClick={()=>onDelete(review.id)} className="flex-1 bg-red-900/50 text-red-400 border border-red-800 rounded text-xs font-bold py-1">Usuń</button></div>}
     </div>;
 }
 
@@ -486,22 +476,26 @@ function InviteCodeModal({onClose,onSubmitted,onError}){
     const [busy,setBusy]=useState(false);
     const [reviewText,setReviewText]=useState('');
     const verify=async e=>{
-        e.preventDefault();if(!supabase)return;
+        e.preventDefault();
+        const client = getSupabase();
+        if(!client)return;
         setBusy(true);setError('');
-        const {data:preview,error:rpcError}=await supabase.rpc('get_invite_code_preview',{input_code:code.trim().toUpperCase()});
+        const {data:preview,error:rpcError}=await client.rpc('get_invite_code_preview',{input_code:code.trim().toUpperCase()});
         setBusy(false);
-        if(rpcError||!preview||!preview.length)return setError('Invalid or already used invite code.');
+        if(rpcError||!preview||!preview.length)return setError('Nieprawidłowy lub zużyty kod.');
         setData(preview[0]);
     };
     const submit=async e=>{
-        e.preventDefault();if(!data||!reviewText.trim())return;
+        e.preventDefault();
+        const client = getSupabase();
+        if(!data||!reviewText.trim()||!client)return;
         setBusy(true);setError('');
-        const {error:rpcError}=await supabase.rpc('submit_review_with_code',{input_code:code.trim().toUpperCase(),input_discord_username:data.discord_username||null,input_review_text:reviewText.trim()});
+        const {error:rpcError}=await client.rpc('submit_review_with_code',{input_code:code.trim().toUpperCase(),input_discord_username:data.discord_username||null,input_review_text:reviewText.trim()});
         setBusy(false);
         if(rpcError)return setError(rpcError.message);
         await onSubmitted();
     };
-    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Use Invite Code</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl">×</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Invite code"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Checking…':'Verify code'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 flex items-center gap-3"><img src={data.avatar_url||avatarFallback(data.nickname)} className="w-10 h-10 rounded-full object-cover" alt=""/><div><b>{data.nickname}</b><div className="text-accent text-xs">{data.role}</div></div></div><Field label="Your review"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={busy} className="flex-1 bg-accent text-darker font-bold py-2 rounded">{busy?'Sending…':'Submit review'}</button></div></form>}</div></div>;
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Użyj kodu zaproszenia</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Kod"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Sprawdzam…':'Weryfikuj'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 flex items-center gap-3"><img src={data.avatar_url||avatarFallback(data.nickname)} className="w-10 h-10 rounded-full object-cover" alt=""/><div><b className="text-white">{data.nickname}</b><div className="text-accent font-bold text-xs">{data.role}</div></div></div><Field label="Twoja opinia"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32 font-medium" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Anuluj</button><button disabled={busy} className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">{busy?'Wysyłam…':'Wyślij opinię'}</button></div></form>}</div></div>;
 }
 
 function AdminTab({reviews,inviteCodes,reloadReviews,reloadProjects,reloadCodes,onError,onToast}){
@@ -512,42 +506,43 @@ function AdminTab({reviews,inviteCodes,reloadReviews,reloadProjects,reloadCodes,
     const [codeAvatar,setCodeAvatar]=useState('');
     const [codeAvatarBusy,setCodeAvatarBusy]=useState(false);
 
-    const deleteReview=async id=>{if(!confirm('Delete this review permanently?'))return;const {error}=await supabase.from('reviews').delete().eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast('Review deleted.')};
-    const togglePublish=async(id,published)=>{const {error}=await supabase.from('reviews').update({published}).eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(published?'Review published.':'Review hidden.')};
+    const deleteReview=async id=>{if(!confirm('Usunąć tę opinię na stałe?'))return;const client=getSupabase();const {error}=await client.from('reviews').delete().eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast('Opinia usunięta.')};
+    const togglePublish=async(id,published)=>{const client=getSupabase();const {error}=await client.from('reviews').update({published}).eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(published?'Opublikowano.':'Ukryto.')};
     const uploadCodeAvatar=async file=>{
-        if(!file||!supabase)return;
-        if(file.size>6*1024*1024)return onError('Avatar must be under 6 MB.');
+        const client=getSupabase();
+        if(!file||!client)return;
+        if(file.size>6*1024*1024)return onError('Awatar musi ważyć poniżej 6 MB.');
         setCodeAvatarBusy(true);
         const path=`invite-${crypto.randomUUID()}-${file.name.toLowerCase().replace(/[^a-z0-9._-]/g,'-')}`;
-        const {error}=await supabase.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
+        const {error}=await client.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
         if(error){setCodeAvatarBusy(false);return onError(error.message)}
-        const {data}=supabase.storage.from('review-avatars').getPublicUrl(path);
+        const {data}=client.storage.from('review-avatars').getPublicUrl(path);
         setCodeAvatar(data.publicUrl);setCodeAvatarBusy(false);
     };
     const createInviteCode=async e=>{
         e.preventDefault();
+        const client=getSupabase();
         const form=new FormData(e.currentTarget);
         const nickname=String(form.get('nickname')||'').trim();
         const role=String(form.get('role')||'').trim();
-        if(!nickname||!role)return;
+        if(!nickname||!role||!client)return;
         setCodeBusy(true);
         for(let attempt=0;attempt<8;attempt++){
             const code=Math.random().toString(36).slice(2,8).toUpperCase();
-            const {error}=await supabase.from('invite_codes').insert({code,nickname,role,avatar_url:codeAvatar||null,used:false});
-            if(!error){setCreatingCode(false);e.currentTarget.reset();setCodeAvatar('');await reloadCodes();onToast(`Invite code ${code} created.`);setCodeBusy(false);return;}
+            const {error}=await client.from('invite_codes').insert({code,nickname,role,avatar_url:codeAvatar||null,used:false});
+            if(!error){setCreatingCode(false);e.currentTarget.reset();setCodeAvatar('');await reloadCodes();onToast(`Wygenerowano kod: ${code}`);setCodeBusy(false);return;}
             if(error.code!=='23505'){setCodeBusy(false);return onError(error.message)}
         }
-        setCodeBusy(false);onError('Could not generate a unique invite code.');
+        setCodeBusy(false);onError('Nie udało się wygenerować unikalnego kodu.');
     };
-    const revokeCode=async id=>{if(!confirm('Delete this unused invite code?'))return;const {error}=await supabase.from('invite_codes').delete().eq('id',id).eq('used',false);if(error)return onError(error.message);await reloadCodes();onToast('Invite code revoked.')};
+    const revokeCode=async id=>{if(!confirm('Unieważnić ten kod?'))return;const client=getSupabase();const {error}=await client.from('invite_codes').delete().eq('id',id).eq('used',false);if(error)return onError(error.message);await reloadCodes();onToast('Kod unieważniony.')};
 
     return <div className="animate-fade-in">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold">Admin Panel</h2><p className="text-gray-500 mt-2">Permanent data stored in Supabase.</p></div><div className="flex gap-3"><button onClick={()=>{setEditing(null);setShowForm(true)}} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-5 py-2 rounded">+ Add Review</button><button onClick={()=>setCreatingCode(true)} className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-800 px-4 py-2 rounded font-bold">+ Invite Code</button></div></div>
-        {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm font-bold text-gray-400">Active Invite Codes (one-time use)</p><span className="text-xs text-gray-600">Each code becomes permanently invalid after submission.</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{inviteCodes.map(item=><div key={item.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between"><div className="flex items-center gap-3"><img src={item.pfp||avatarFallback(item.nickname)} className="w-8 h-8 rounded-full object-cover border border-gray-600" alt=""/><div><p className="text-xs font-bold text-white">{item.nickname}</p><p className="text-[10px] text-accent">{item.role}</p></div></div><div className="flex items-center gap-2"><span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span><button className="text-red-400 text-xs hover:text-red-300" onClick={()=>revokeCode(item.id)} title="Revoke unused code">×</button></div></div>)}</div></div>}
-        <div className="mb-12"><h3 className="text-xl font-bold mb-4 text-gray-300">Reviews</h3>{reviews.length===0?<div className="glass rounded-xl p-10 text-center text-gray-500">No reviews in the database.</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.map(r=><ReviewCard key={r.id} review={r} admin onEdit={r=>{setEditing(r);setShowForm(true)}} onDelete={deleteReview} onTogglePublish={togglePublish}/>)}</div>}</div>
-        <div className="glass rounded-xl p-6 border border-gray-700"><div className="flex items-center justify-between mb-4"><div><h3 className="text-xl font-bold">Projects</h3><p className="text-sm text-gray-500">Projects are persistent too. Manage them from the Portfolio tab.</p></div><button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded text-sm font-bold">Go to Portfolio</button></div></div>
-        {showForm&&<ReviewFormModal review={editing} onSave={async()=>{setShowForm(false);setEditing(null);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(editing?'Review updated.':'Review created.')}} onCancel={()=>{setShowForm(false);setEditing(null)}} onError={onError}/>} 
-        {creatingCode&&<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl border border-gray-700 max-w-md w-full"><div className="flex justify-between items-center mb-5"><div><h3 className="text-xl font-bold text-purple-300">Generate Invite Code</h3><p className="text-xs text-gray-500 mt-1">One-time use. It expires immediately after the reviewer submits the review.</p></div><button onClick={()=>setCreatingCode(false)} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={createInviteCode} className="space-y-4"><Field label="Reviewer avatar"><input type="file" accept="image/*" disabled={codeAvatarBusy} onChange={e=>uploadCodeAvatar(e.target.files && e.target.files[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm"/>{codeAvatarBusy&&<p className="text-xs text-gray-500 mt-1">Uploading…</p>}{codeAvatar&&<img src={codeAvatar} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nickname"><input name="nickname" className="form-input" required /></Field><Field label="Role (e.g. Community Manager)"><input name="role" className="form-input" required /></Field><div className="flex gap-4 pt-2"><button type="button" onClick={()=>setCreatingCode(false)} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={codeBusy||codeAvatarBusy} className="flex-1 bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-bold py-2 rounded">{codeBusy?'Generating…':'Generate'}</button></div></form></div></div>}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold text-white">Panel Admina</h2></div><div className="flex gap-3"><button onClick={()=>{setEditing(null);setShowForm(true)}} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-5 py-2 rounded">+ Dodaj opinię</button><button onClick={()=>setCreatingCode(true)} className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-800 px-4 py-2 rounded font-bold">+ Generuj kod</button></div></div>
+        {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm font-bold text-gray-400">Aktywne kody zaproszeń</p></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{inviteCodes.map(item=><div key={item.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between"><div className="flex items-center gap-3"><img src={item.pfp||avatarFallback(item.nickname)} className="w-8 h-8 rounded-full object-cover border border-gray-600" alt=""/><div><p className="text-xs font-bold text-white">{item.nickname}</p><p className="text-[10px] text-accent font-bold">{item.role}</p></div></div><div className="flex items-center gap-2"><span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span><button className="text-red-400 text-lg font-bold hover:text-red-300 px-2" onClick={()=>revokeCode(item.id)} title="Unieważnij">✕</button></div></div>)}</div></div>}
+        <div className="mb-12"><h3 className="text-xl font-bold mb-4 text-gray-300">Zarządzanie opiniami</h3>{reviews.length===0?<div className="glass rounded-xl p-10 text-center text-gray-500 font-bold">Brak opinii w bazie.</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.map(r=><ReviewCard key={r.id} review={r} admin onEdit={r=>{setEditing(r);setShowForm(true)}} onDelete={deleteReview} onTogglePublish={togglePublish}/>)}</div>}</div>
+        {showForm&&<ReviewFormModal review={editing} onSave={async()=>{setShowForm(false);setEditing(null);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(editing?'Zaktualizowano.':'Dodano nową opinię.')}} onCancel={()=>{setShowForm(false);setEditing(null)}} onError={onError}/>} 
+        {creatingCode&&<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl border border-gray-700 max-w-md w-full"><div className="flex justify-between items-center mb-5"><div><h3 className="text-xl font-bold text-purple-300">Generuj kod</h3><p className="text-xs text-gray-500 mt-1 font-bold">Jednorazowego użytku.</p></div><button onClick={()=>setCreatingCode(false)} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div><form onSubmit={createInviteCode} className="space-y-4"><Field label="Awatar"><input type="file" accept="image/*" disabled={codeAvatarBusy} onChange={e=>uploadCodeAvatar(e.target.files && e.target.files[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm font-bold"/>{codeAvatarBusy&&<p className="text-xs text-gray-500 mt-1 font-bold">Wysyłam…</p>}{codeAvatar&&<img src={codeAvatar} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nazwa (Nickname)"><input name="nickname" className="form-input" required /></Field><Field label="Rola (np. Developer)"><input name="role" className="form-input" required /></Field><div className="flex gap-4 pt-2"><button type="button" onClick={()=>setCreatingCode(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Anuluj</button><button disabled={codeBusy||codeAvatarBusy} className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-2 rounded">{codeBusy?'Generowanie…':'Generuj'}</button></div></form></div></div>}
     </div>;
 }
 
@@ -564,35 +559,37 @@ function ReviewFormModal({review,onSave,onCancel,onError}){
     const [saving,setSaving]=useState(false),[uploading,setUploading]=useState(false);
     const avg=useMemo(()=>calculateAverageRating(formData.ratings),[formData.ratings]);
     const uploadAvatar=async file=>{
-        if(!file||!supabase)return;
-        if(file.size>6*1024*1024)return onError('Avatar must be under 6 MB.');
+        const client=getSupabase();
+        if(!file||!client)return;
+        if(file.size>6*1024*1024)return onError('Awatar musi ważyć poniżej 6 MB.');
         setUploading(true);
         const path=`review-${crypto.randomUUID()}-${file.name.toLowerCase().replace(/[^a-z0-9._-]/g,'-')}`;
-        const {error}=await supabase.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
+        const {error}=await client.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
         if(error){setUploading(false);return onError(error.message)}
-        const {data}=supabase.storage.from('review-avatars').getPublicUrl(path);
+        const {data}=client.storage.from('review-avatars').getPublicUrl(path);
         setFormData(f=>({...f,pfp:data.publicUrl}));setUploading(false);
     };
     const save=async e=>{
         e.preventDefault();
-        if(!supabase)return;
-        if(!formData.nickname.trim()||!formData.text.trim())return onError('Nickname and Review Text are required.');
+        const client=getSupabase();
+        if(!client)return;
+        if(!formData.nickname.trim()||!formData.text.trim())return onError('Nazwa i tekst są wymagane.');
         setSaving(true);
         const payload={nickname:formData.nickname.trim(),discord_username:formData.discord.trim()||null,role:formData.role.trim()||null,review_text:formData.text.trim(),avatar_url:formData.pfp.trim()||null,ratings:(formData.ratings||[]).map(r=>({category:String(r.category||'').trim(),value:Math.max(0,Math.min(5,Math.round(Number(r.value)*2)/2))})).filter(r=>r.category&&Number.isFinite(r.value)),published:!!formData.published};
-        const result=review?await supabase.from('reviews').update(payload).eq('id',review.id):await supabase.from('reviews').insert(payload);
+        const result=review?await client.from('reviews').update(payload).eq('id',review.id):await client.from('reviews').insert(payload);
         setSaving(false);
         if(result.error)return onError(result.error.message);
         await onSave();
     };
     const updateRating=(index,value)=>setFormData(f=>{const a=[...f.ratings];a[index]={...a[index],value};return {...f,ratings:a}});
-    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8 max-h-[94vh] overflow-y-auto"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">{review?'Edit Review':'Add Review'}</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={save} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Avatar"><input type="file" accept="image/*" disabled={uploading} onChange={e=>uploadAvatar(e.target.files && e.target.files[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm"/>{uploading&&<div className="text-xs text-gray-500 mt-1">Uploading…</div>}{formData.pfp&&<img src={formData.pfp} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nickname"><input value={formData.nickname} onChange={e=>setFormData({...formData,nickname:e.target.value})} className="form-input" required /></Field><Field label="Discord Username"><input value={formData.discord} onChange={e=>setFormData({...formData,discord:e.target.value})} className="form-input" /></Field><Field label="Role"><input value={formData.role} onChange={e=>setFormData({...formData,role:e.target.value})} className="form-input" placeholder="Community Manager" /></Field></div><Field label="Review Text"><textarea value={formData.text} onChange={e=>setFormData({...formData,text:e.target.value})} className="form-input h-28" required /></Field><div className="p-4 bg-gray-900 rounded border border-gray-700"><div className="flex justify-between items-center mb-3"><label className="text-sm font-bold text-accent">Ratings (Average: {avg.toFixed(1)} / 5)</label><button type="button" onClick={()=>setFormData(f=>({...f,ratings:[...f.ratings,{category:'New category',value:5}]}))} className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-3 py-2 font-bold">+ Add category</button></div>{formData.ratings.length===0?<p className="text-xs text-gray-500 italic">No ratings added.</p>:formData.ratings.map((rating,idx)=><div key={idx} className="flex items-center justify-between gap-3 mb-2"><input value={rating.category} onChange={e=>{const a=[...formData.ratings];a[idx]={...a[idx],category:e.target.value};setFormData({...formData,ratings:a})}} className="bg-gray-950 border border-gray-700 rounded p-2 text-white text-xs w-1/3"/><input type="range" min="0" max="5" step="0.5" value={rating.value} onChange={e=>updateRating(idx,parseFloat(e.target.value))} className="w-1/3 accent-accent"/><div className="flex items-center gap-2 w-28 justify-end"><span className="text-yellow-400 font-mono text-xs">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div><button type="button" onClick={()=>setFormData(f=>({...f,ratings:f.ratings.filter((_,i)=>i!==idx)}))} className="text-red-500 hover:text-red-400 font-bold text-xs px-2 py-1 bg-red-950/40 border border-red-900/50 rounded">✕</button></div>)}</div><label className="flex items-center gap-2 cursor-pointer text-white font-bold text-sm"><input type="checkbox" checked={formData.published} onChange={e=>setFormData({...formData,published:e.target.checked})} className="w-4 h-4 accent-accent rounded"/>Publish immediately</label><div className="flex gap-4 pt-2 border-t border-gray-700"><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button><button disabled={saving||uploading} className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{saving?'Saving…':'Save Review'}</button></div></form></div></div>;
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8 max-h-[94vh] overflow-y-auto"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">{review?'Edytuj opinię':'Dodaj opinię'}</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div><form onSubmit={save} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Awatar"><input type="file" accept="image/*" disabled={uploading} onChange={e=>uploadAvatar(e.target.files && e.target.files[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm font-bold"/>{uploading&&<div className="text-xs text-gray-500 mt-1 font-bold">Wysyłam…</div>}{formData.pfp&&<img src={formData.pfp} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nazwa"><input value={formData.nickname} onChange={e=>setFormData({...formData,nickname:e.target.value})} className="form-input" required /></Field><Field label="Discord"><input value={formData.discord} onChange={e=>setFormData({...formData,discord:e.target.value})} className="form-input" /></Field><Field label="Rola"><input value={formData.role} onChange={e=>setFormData({...formData,role:e.target.value})} className="form-input" /></Field></div><Field label="Treść opinii"><textarea value={formData.text} onChange={e=>setFormData({...formData,text:e.target.value})} className="form-input h-28 font-medium" required /></Field><div className="p-4 bg-gray-900 rounded border border-gray-700"><div className="flex justify-between items-center mb-3"><label className="text-sm font-bold text-accent">Oceny (Średnia: {avg.toFixed(1)} / 5)</label><button type="button" onClick={()=>setFormData(f=>({...f,ratings:[...f.ratings,{category:'Nowa kategoria',value:5}]}))} className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-3 py-2 font-bold">+ Dodaj kategorię</button></div>{formData.ratings.length===0?<p className="text-xs text-gray-500 italic font-bold">Brak ocen.</p>:formData.ratings.map((rating,idx)=><div key={idx} className="flex items-center justify-between gap-3 mb-2"><input value={rating.category} onChange={e=>{const a=[...formData.ratings];a[idx]={...a[idx],category:e.target.value};setFormData({...formData,ratings:a})}} className="bg-gray-950 border border-gray-700 rounded p-2 text-white text-xs w-1/3 font-bold"/><input type="range" min="0" max="5" step="0.5" value={rating.value} onChange={e=>updateRating(idx,parseFloat(e.target.value))} className="w-1/3 accent-accent"/><div className="flex items-center gap-2 w-28 justify-end"><span className="text-yellow-400 font-mono text-xs font-bold">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div><button type="button" onClick={()=>setFormData(f=>({...f,ratings:f.ratings.filter((_,i)=>i!==idx)}))} className="text-red-500 hover:text-red-400 font-bold text-xs px-2 py-1 bg-red-950/40 border border-red-900/50 rounded">✕</button></div>)}</div><label className="flex items-center gap-2 cursor-pointer text-white font-bold text-sm"><input type="checkbox" checked={formData.published} onChange={e=>setFormData({...formData,published:e.target.checked})} className="w-4 h-4 accent-accent rounded"/>Opublikuj od razu</label><div className="flex gap-4 pt-2 border-t border-gray-700"><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Anuluj</button><button disabled={saving||uploading} className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{saving?'Zapisywanie…':'Zapisz'}</button></div></form></div></div>;
 }
 
 function ProjectFormModal({project,reviews,onSave,onCancel}){
     const [formData,setFormData]=useState(()=>project?{...project,pinnedReviews:project.pinnedReviews||[]}:{title:'',steamLink:'',details:'',pinnedReviews:[]});
     const togglePin=revId=>setFormData(f=>({...f,pinnedReviews:f.pinnedReviews.includes(revId)?f.pinnedReviews.filter(id=>id!==revId):[...f.pinnedReviews,revId]}));
-    const handleSubmit=e=>{e.preventDefault();if(!formData.title.trim())return alert('Title is required.');onSave(formData)};
-    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8"><h2 className="text-2xl font-bold mb-6 text-accent">{project?'Edit Project':'New Project'}</h2><form onSubmit={handleSubmit} className="space-y-4"><Field label="Game Title"><input type="text" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})} className="form-input" required/></Field><Field label="Steam URL"><input type="url" value={formData.steamLink} onChange={e=>setFormData({...formData,steamLink:e.target.value})} className="form-input" placeholder="https://store.steampowered.com/app/..." /></Field><Field label="Translation Details"><textarea value={formData.details} onChange={e=>setFormData({...formData,details:e.target.value})} className="form-input h-32" /></Field><div><label className="block text-sm font-bold text-accent mb-2">Pin Reviews to this Project</label><div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">{reviews.map(rev=><label key={rev.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-800 rounded"><input type="checkbox" checked={formData.pinnedReviews.includes(rev.id)} onChange={()=>togglePin(rev.id)} className="w-4 h-4 accent-accent"/><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-6 h-6 rounded-full object-cover" alt=""/><span className="text-sm font-bold text-white">{rev.nickname}</span><span className="text-xs text-gray-500 truncate max-w-[200px]">"{rev.text}"</span></label>)}{reviews.length===0&&<p className="text-xs text-gray-500">No reviews available to pin.</p>}</div></div><div className="flex gap-4 pt-4 border-t border-gray-700"><button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Save Project</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button></div></form></div></div>;
+    const handleSubmit=e=>{e.preventDefault();if(!formData.title.trim())return alert('Tytuł jest wymagany.');onSave(formData)};
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8"><h2 className="text-2xl font-bold mb-6 text-accent">{project?'Edytuj projekt':'Nowy projekt'}</h2><form onSubmit={handleSubmit} className="space-y-4"><Field label="Tytuł Gry"><input type="text" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})} className="form-input" required/></Field><Field label="Link Steam"><input type="url" value={formData.steamLink} onChange={e=>setFormData({...formData,steamLink:e.target.value})} className="form-input" placeholder="https://store.steampowered.com/app/..." /></Field><Field label="Szczegóły tłumaczenia"><textarea value={formData.details} onChange={e=>setFormData({...formData,details:e.target.value})} className="form-input h-32 font-medium" /></Field><div><label className="block text-sm font-bold text-accent mb-2">Przypnij opinie do tego projektu</label><div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">{reviews.map(rev=><label key={rev.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-800 rounded"><input type="checkbox" checked={formData.pinnedReviews.includes(rev.id)} onChange={()=>togglePin(rev.id)} className="w-4 h-4 accent-accent"/><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-6 h-6 rounded-full object-cover" alt=""/><span className="text-sm font-bold text-white">{rev.nickname}</span><span className="text-xs text-gray-500 font-medium truncate max-w-[200px]">"{rev.text}"</span></label>)}{reviews.length===0&&<p className="text-xs text-gray-500 font-bold">Brak opinii.</p>}</div></div><div className="flex gap-4 pt-4 border-t border-gray-700"><button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Zapisz projekt</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Anuluj</button></div></form></div></div>;
 }
 
 function Field({label,children}){return <label className="block"><span className="block text-sm font-bold text-gray-400 mb-1">{label}</span>{children}</label>}
