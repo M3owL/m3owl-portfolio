@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3owL - Polish Translator Portfolio</title>
+    <title>M3owL - Junior Polish Translator</title>
     
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -169,7 +169,7 @@ function App() {
     const [inviteCodes,setInviteCodes] = useState([]);
     const [isAdmin,setIsAdmin] = useState(false);
     const [session,setSession] = useState(null);
-    const [activeTab,setActiveTab] = useState('portfolio');
+    const [activeTab,setActiveTab] = useState('work history');
     const [loading,setLoading] = useState(true);
     const [error,setError] = useState('');
     const [toast,setToast] = useState('');
@@ -299,8 +299,8 @@ function App() {
 
     const navTabs = [
         { id: 'about', label: 'About Me' },
-        { id: 'portfolio', label: 'Portfolio' },
-        { id: 'reviews', label: 'Reviews' }
+        { id: 'work history', label: 'Work History' },
+        { id: 'feedbacks', label: 'Feedbacks' }
     ];
 
     return (
@@ -342,8 +342,8 @@ function App() {
                 {error && <div className="mb-8 p-4 rounded-xl border border-red-500/50 bg-red-950/40 text-red-200 text-sm flex justify-between items-center"><span>⚠️ <b>Error:</b> {error}</span><button className="text-lg font-bold ml-4" onClick={()=>setError('')}>×</button></div>}
                 {loading ? <div className="py-24 text-center text-gray-500 font-bold">Connecting to database...</div> : <>
                     {activeTab==='about' && <AboutMe />}
-                    {activeTab==='portfolio' && <PortfolioTab projects={projects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} openProjectModal={(proj)=>setModal({type:'projectForm', data:proj})} />}
-                    {activeTab==='reviews' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} openCodeModal={()=>setModal({type:'inviteCode', data:null})} />}
+                    {activeTab==='work history' && <PortfolioTab projects={projects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} openProjectModal={(proj)=>setModal({type:'projectForm', data:proj})} />}
+                    {activeTab==='feedbacks' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} openCodeModal={()=>setModal({type:'inviteCode', data:null})} />}
                     {activeTab==='admin' && isAdmin && <AdminTab reviews={reviews} inviteCodes={inviteCodes} reloadReviews={loadReviews} reloadProjects={loadProjects} reloadCodes={loadInviteCodes} onError={setError} onToast={setToast} openReviewModal={(rev)=>setModal({type:'reviewForm', data:rev})} openGenerateModal={()=>setModal({type:'generateCode', data:null})} />}
                 </>}
             </main>
@@ -446,7 +446,7 @@ function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectMod
         await onChanged();
     };
     return <div className="animate-fade-in relative">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Portfolio</h2>{isAdmin&&<button onClick={()=>openProjectModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Work History</h2>{isAdmin&&<button onClick={()=>openProjectModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
         {projects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No projects added.</p>:<div className="space-y-12">{projects.map(proj=>{
             const appId=getSteamAppId(proj.steamLink);
             const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
