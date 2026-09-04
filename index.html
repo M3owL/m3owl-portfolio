@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3owL - Junior Polish Translator</title>
+    <title>M3owL - Polish Translator Portfolio</title>
     
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -141,6 +141,8 @@ function normalizeProject(p) {
         steamLink: p.steamLink != null ? p.steamLink : (p.steam_url != null ? p.steam_url : ''),
         details: p.details != null ? p.details : '',
         pinnedReviews: p.pinnedReviews != null ? p.pinnedReviews : (p.pinned_reviews != null ? p.pinned_reviews : []),
+        pinned: !!p.pinned,
+        sort_order: p.sort_order != null ? Number(p.sort_order) : 0
     };
 }
 
@@ -151,6 +153,7 @@ function normalizeReview(r) {
         discord: r.discord != null ? r.discord : (r.discord_username != null ? r.discord_username : ''),
         text: r.text != null ? r.text : (r.review_text != null ? r.review_text : ''),
         date: r.date != null ? r.date : (r.created_at != null ? r.created_at : ''),
+        game_title: r.game_title != null ? r.game_title : '',
         ratings: Array.isArray(r.ratings) ? r.ratings : []
     };
 }
@@ -159,6 +162,7 @@ function normalizeCode(c) {
     return {
         ...c,
         pfp: c.pfp != null ? c.pfp : (c.avatar_url != null ? c.avatar_url : ''),
+        game_title: c.game_title != null ? c.game_title : '',
         used: !!c.used
     };
 }
@@ -169,12 +173,11 @@ function App() {
     const [inviteCodes,setInviteCodes] = useState([]);
     const [isAdmin,setIsAdmin] = useState(false);
     const [session,setSession] = useState(null);
-    const [activeTab,setActiveTab] = useState('work history');
+    const [activeTab,setActiveTab] = useState('portfolio');
     const [loading,setLoading] = useState(true);
     const [error,setError] = useState('');
     const [toast,setToast] = useState('');
 
-    // Global modal state
     const [modal, setModal] = useState({ type: null, data: null });
 
     const loadReviews = async (adminView=isAdmin) => {
@@ -190,7 +193,7 @@ function App() {
     const loadProjects = async () => {
         const client = getSupabase();
         if (!client) return;
-        const {data,error} = await client.from('projects').select('*').order('created_at',{ascending:false});
+        const {data,error} = await client.from('projects').select('*').order('sort_order',{ascending:true}).order('created_at',{ascending:false});
         if (error) { handleNetworkError(error); return; }
         setProjects((data || []).map(normalizeProject));
     };
@@ -299,8 +302,8 @@ function App() {
 
     const navTabs = [
         { id: 'about', label: 'About Me' },
-        { id: 'work history', label: 'Work History' },
-        { id: 'feedbacks', label: 'Feedbacks' }
+        { id: 'portfolio', label: 'Portfolio' },
+        { id: 'reviews', label: 'Reviews' }
     ];
 
     return (
@@ -342,15 +345,14 @@ function App() {
                 {error && <div className="mb-8 p-4 rounded-xl border border-red-500/50 bg-red-950/40 text-red-200 text-sm flex justify-between items-center"><span>⚠️ <b>Error:</b> {error}</span><button className="text-lg font-bold ml-4" onClick={()=>setError('')}>×</button></div>}
                 {loading ? <div className="py-24 text-center text-gray-500 font-bold">Connecting to database...</div> : <>
                     {activeTab==='about' && <AboutMe />}
-                    {activeTab==='work history' && <PortfolioTab projects={projects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} openProjectModal={(proj)=>setModal({type:'projectForm', data:proj})} />}
-                    {activeTab==='feedbacks' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} openCodeModal={()=>setModal({type:'inviteCode', data:null})} />}
+                    {activeTab==='portfolio' && <PortfolioTab projects={projects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} openProjectModal={(proj)=>setModal({type:'projectForm', data:proj})} />}
+                    {activeTab==='reviews' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} openCodeModal={()=>setModal({type:'inviteCode', data:null})} />}
                     {activeTab==='admin' && isAdmin && <AdminTab reviews={reviews} inviteCodes={inviteCodes} reloadReviews={loadReviews} reloadProjects={loadProjects} reloadCodes={loadInviteCodes} onError={setError} onToast={setToast} openReviewModal={(rev)=>setModal({type:'reviewForm', data:rev})} openGenerateModal={()=>setModal({type:'generateCode', data:null})} />}
                 </>}
             </main>
 
-            <footer className="max-w-7xl mx-auto w-full px-8 pb-8 text-xs text-gray-600 font-bold">M3owL · Junior Polish Game Translator · _m3owl</footer>
+            <footer className="max-w-7xl mx-auto w-full px-8 pb-8 text-xs text-gray-600 font-bold">M3owL · Polish Game Translator · _m3owl</footer>
             
-            {/* Secret Login Trigger */}
             <div
                 aria-hidden="true"
                 onClick={() => {
@@ -365,7 +367,6 @@ function App() {
                 className="fixed bottom-0 left-0 w-7 h-7 z-[9999] opacity-0 cursor-default"
             />
 
-            {/* GLOBAL MODALS (rendered at root level to escape container transform/backdrop-filter traps) */}
             {modal.type === 'login' && <LoginModal onSuccess={handleLoginSuccess} onCancel={()=>setModal({type:null, data:null})} />}
             {modal.type === 'inviteCode' && <InviteCodeModal onClose={()=>setModal({type:null, data:null})} onSubmitted={async()=>{setModal({type:null, data:null});await loadReviews(isAdmin);setToast('Review submitted. Awaiting approval.')}} onError={setError}/>}
             {modal.type === 'generateCode' && <GenerateCodeModal onClose={()=>setModal({type:null, data:null})} onCreated={async()=>{setModal({type:null, data:null});await loadInviteCodes();setToast('Code generated successfully.')}} onError={setError} onToast={setToast}/>}
@@ -373,7 +374,14 @@ function App() {
             {modal.type === 'projectForm' && <ProjectFormModal project={modal.data} reviews={reviews} onSave={async(data)=>{
                 const client = getSupabase();
                 if(!client)return;
-                const payload={title:data.title.trim(),steam_url:data.steamLink ? data.steamLink.trim() : null,details:data.details||'',pinned_reviews:data.pinnedReviews||[]};
+                const payload={
+                    title:data.title.trim(),
+                    steam_url:data.steamLink ? data.steamLink.trim() : null,
+                    details:data.details||'',
+                    pinned_reviews:data.pinnedReviews||[],
+                    pinned: !!data.pinned,
+                    sort_order: Number(data.sort_order) || 0
+                };
                 const result=modal.data ? await client.from('projects').update(payload).eq('id',modal.data.id) : await client.from('projects').insert(payload);
                 if(result.error){setError(result.error.message);return;}
                 await loadProjects();
@@ -429,9 +437,9 @@ function AboutMe(){
     return <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
         <h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">About Me</h2>
         <div className="glass p-8 rounded-xl">
-            <h3 className="text-2xl font-bold text-accent mb-4">Hello, I'm MeowL</h3>
-            <p className="text-gray-300 text-lg leading-relaxed mb-4">I am a Junior Polish Game Translator focusing on video games and game-development communities. With a proper word keys, context and details, I ensure that your game feels native and natural to Polish players.</p>
-            <p className="text-gray-300 text-lg leading-relaxed">I help developers reach the Polish gaming market with high-quality, natural-sounding translations tailored to the context of their games.</p>
+            <h3 className="text-2xl font-bold text-accent mb-4">Hi, I'm MeowL</h3>
+            <p className="text-gray-300 text-lg leading-relaxed mb-4">I am a Junior Polish Game Translator. I translate video games and help developers adapt their titles for Polish players. I focus on natural-sounding translations and preserving the original vibe.</p>
+            <p className="text-gray-300 text-lg leading-relaxed">If you need a translation that doesn't sound like AI, you've come to the right place.</p>
             <div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2"><p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p><p><strong className="text-white">Position:</strong> Polish Game Translator / Localization Junior</p></div>
         </div>
     </div>;
@@ -445,16 +453,62 @@ function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectMod
         if(error)return onError(error.message);
         await onChanged();
     };
+
+    const moveProject = async (index, direction) => {
+        const targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= projects.length) return;
+        const newProjects = [...projects];
+        const temp = newProjects[index];
+        newProjects[index] = newProjects[targetIndex];
+        newProjects[targetIndex] = temp;
+
+        // Update sort_order for all affected or all items
+        for (let i = 0; i < newProjects.length; i++) {
+            await client.from('projects').update({ sort_order: i }).eq('id', newProjects[i].id);
+        }
+        await onChanged();
+    };
+
+    const togglePinProject = async (project) => {
+        const { error } = await client.from('projects').update({ pinned: !project.pinned }).eq('id', project.id);
+        if (error) return onError(error.message);
+        await onChanged();
+    };
+
+    const sortedProjects = [...projects].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+    });
+
     return <div className="animate-fade-in relative">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Work History</h2>{isAdmin&&<button onClick={()=>openProjectModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
-        {projects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No projects added.</p>:<div className="space-y-12">{projects.map(proj=>{
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Portfolio</h2>{isAdmin&&<button onClick={()=>openProjectModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
+        {sortedProjects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No projects added.</p>:<div className="space-y-12">{sortedProjects.map((proj, idx)=>{
             const appId=getSteamAppId(proj.steamLink);
             const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
             const logoUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;
-            return <div key={proj.id} className="glass rounded-xl overflow-hidden shadow-2xl border border-gray-700 relative">
+            return <div key={proj.id} className={`glass rounded-xl overflow-hidden shadow-2xl border ${proj.pinned ? 'border-accent shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'border-gray-700'} relative`}>
                 {bannerUrl&&<div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${bannerUrl})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div></div>}
                 <div className="p-8 relative z-10">
-                    <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-4">{logoUrl&&<img src={logoUrl} alt="Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}<div><h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>{proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Steam Page</a>}</div></div>{isAdmin&&<div className="flex gap-2"><button onClick={()=>openProjectModal(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button><button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button></div>}</div>
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="flex items-center gap-4">
+                            {logoUrl&&<img src={logoUrl} alt="Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>
+                                    {proj.pinned && <span className="bg-accent/20 text-accent border border-accent/40 text-xs px-2 py-0.5 rounded font-bold uppercase">Pinned</span>}
+                                </div>
+                                {proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Steam Page</a>}
+                            </div>
+                        </div>
+                        {isAdmin&&<div className="flex flex-wrap gap-2 items-center">
+                            <button onClick={()=>togglePinProject(proj)} className={`px-3 py-1 rounded text-sm font-bold border ${proj.pinned ? 'bg-accent text-darker border-accent' : 'bg-gray-800 text-gray-300 border-gray-600'}`}>{proj.pinned ? 'Unpin' : 'Pin'}</button>
+                            <button onClick={()=>moveProject(idx, -1)} disabled={idx === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-sm font-bold border border-gray-600" title="Move Up">↑</button>
+                            <button onClick={()=>moveProject(idx, 1)} disabled={idx === sortedProjects.length - 1} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-sm font-bold border border-gray-600" title="Move Down">↓</button>
+                            <button onClick={()=>openProjectModal(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button>
+                            <button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button>
+                        </div>}
+                    </div>
                     <div className="text-gray-300 font-medium leading-relaxed mb-6 whitespace-pre-wrap">{proj.details}</div>
                 </div>
                 {proj.pinnedReviews && proj.pinnedReviews.length>0&&<PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews}/>} 
@@ -472,22 +526,34 @@ function PinnedReviewsSection({pinnedReviewIds,reviews}){
         check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);
     },[pinnedReviewsList]);
     if(!pinnedReviewsList.length)return null;
-    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent font-bold">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div><p className="text-xs text-gray-300 italic font-medium line-clamp-2">"{rev.text}"</p></div>;
-    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Pinned Feedbacks</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
+    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent font-bold">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div>{rev.game_title && <p className="text-[10px] text-accent font-bold mb-1">Gra: {rev.game_title}</p>}<p className="text-xs text-gray-300 italic font-medium line-clamp-2">"{rev.text}"</p></div>;
+    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Pinned Reviews</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
 }
 
 function ReviewsTab({reviews,isAdmin,onRefresh,onError,onToast,openCodeModal}){
     const displayReviews=isAdmin?reviews:reviews.filter(r=>r.published);
     return <div className="animate-fade-in relative">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Feedbacks/Opinions</h2>{!isAdmin&&<button onClick={openCodeModal} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">I have an invite code</button>}</div>
-        {displayReviews.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No feedbacks yet.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{displayReviews.map(review=><ReviewCard key={review.id} review={review} admin={isAdmin} onEdit={null} onDelete={null} onTogglePublish={null}/>)}</div>}
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Reviews</h2>{!isAdmin&&<button onClick={openCodeModal} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">I have an invite code</button>}</div>
+        {displayReviews.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No reviews yet.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{displayReviews.map(review=><ReviewCard key={review.id} review={review} admin={isAdmin} onEdit={null} onDelete={null} onTogglePublish={null}/>)}</div>}
     </div>;
 }
 
 function ReviewCard({review,admin,onEdit,onDelete,onTogglePublish}){
     const average=calculateAverageRating(review.ratings);
     return <div className={`glass rounded-xl p-6 shadow-xl flex flex-col ${admin&&!review.published?'opacity-50 grayscale border-dashed':''}`}>
-        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4"><div className="flex items-center gap-4"><img src={review.pfp||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>{e.currentTarget.src=avatarFallback(review.nickname)}}/><div><h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3><p className="text-xs text-accent font-bold">{review.role}</p>{review.discord&&<p className="text-[10px] text-gray-500 mt-1 font-mono">{review.discord}</p>}<p className="text-[10px] text-gray-500 mt-1 font-bold">{formatDate(review.date)}</p></div></div>{review.ratings && review.ratings.length>0&&<div className="text-right"><div className="text-sm font-mono font-bold text-yellow-400">{average.toFixed(1)} / 5</div>{renderStars(average)}</div>}</div>
+        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4">
+            <div className="flex items-center gap-4">
+                <img src={review.pfp||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>{e.currentTarget.src=avatarFallback(review.nickname)}}/>
+                <div>
+                    <h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3>
+                    <p className="text-xs text-accent font-bold">{review.role}</p>
+                    {review.game_title && <span className="inline-block mt-1 bg-accent/10 text-accent border border-accent/30 text-[10px] px-2 py-0.5 rounded font-bold">Gra: {review.game_title}</span>}
+                    {review.discord&&<p className="text-[10px] text-gray-500 mt-1 font-mono">{review.discord}</p>}
+                    <p className="text-[10px] text-gray-500 mt-1 font-bold">{formatDate(review.date)}</p>
+                </div>
+            </div>
+            {review.ratings && review.ratings.length>0&&<div className="text-right"><div className="text-sm font-mono font-bold text-yellow-400">{average.toFixed(1)} / 5</div>{renderStars(average)}</div>}
+        </div>
         <p className="text-gray-300 text-sm italic font-medium flex-grow mb-6">"{review.text}"</p>
         {review.ratings && review.ratings.length>0&&<div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">{review.ratings.map((rating,idx)=><div key={idx} className="flex justify-between items-center"><span className="text-xs font-bold text-gray-400">{rating.category}</span><div className="flex items-center gap-2"><span className="text-yellow-400 text-xs font-mono font-bold">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div></div>)}</div>}
         {admin&&<div className="flex gap-2 mt-auto border-t border-gray-700 pt-4"><button onClick={()=>onTogglePublish(review.id,!review.published)} className={`flex-1 text-xs py-1 rounded font-bold ${review.published?'bg-green-900/50 text-green-400 border border-green-800':'bg-gray-700 text-gray-400 border border-gray-600'}`}>{review.published?'Published':'Hidden'}</button><button onClick={()=>onEdit(review)} className="flex-1 bg-blue-900/50 text-blue-400 border border-blue-800 rounded text-xs font-bold py-1">Edit</button><button onClick={()=>onDelete(review.id)} className="flex-1 bg-red-900/50 text-red-400 border border-red-800 rounded text-xs font-bold py-1">Delete</button></div>}
@@ -520,7 +586,7 @@ function InviteCodeModal({onClose,onSubmitted,onError}){
         if(rpcError)return setError(rpcError.message);
         await onSubmitted();
     };
-    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Use invite code</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Code"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Verifying…':'Verify'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 flex items-center gap-3"><img src={data.avatar_url||avatarFallback(data.nickname)} className="w-10 h-10 rounded-full object-cover" alt=""/><div><b className="text-white">{data.nickname}</b><div className="text-accent font-bold text-xs">{data.role}</div></div></div><Field label="Your review"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32 font-medium" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button><button disabled={busy} className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">{busy?'Sending…':'Submit review'}</button></div></form>}</div></div>;
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Use invite code</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl font-bold">✕</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Code"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Verifying…':'Verify'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 flex items-center gap-3"><img src={data.avatar_url||avatarFallback(data.nickname)} className="w-10 h-10 rounded-full object-cover" alt=""/><div><b className="text-white">{data.nickname}</b><div className="text-accent font-bold text-xs">{data.role}</div>{data.game_title && <div className="text-cyan-400 font-bold text-[10px]">Gra: {data.game_title}</div>}</div></div><Field label="Your review"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32 font-medium" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button><button disabled={busy} className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">{busy?'Sending…':'Submit review'}</button></div></form>}</div></div>;
 }
 
 function AdminTab({reviews,inviteCodes,reloadReviews,reloadProjects,reloadCodes,onError,onToast,openReviewModal,openGenerateModal}){
@@ -531,7 +597,7 @@ function AdminTab({reviews,inviteCodes,reloadReviews,reloadProjects,reloadCodes,
 
     return <div className="animate-fade-in">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold text-white">Admin Panel</h2></div><div className="flex gap-3"><button onClick={()=>openReviewModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-5 py-2 rounded">+ Add Review</button><button onClick={openGenerateModal} className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-800 px-4 py-2 rounded font-bold">+ Generate Code</button></div></div>
-        {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm font-bold text-gray-400">Active Invite Codes</p></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{inviteCodes.map(item=><div key={item.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between"><div className="flex items-center gap-3"><img src={item.pfp||avatarFallback(item.nickname)} className="w-8 h-8 rounded-full object-cover border border-gray-600" alt=""/><div><p className="text-xs font-bold text-white">{item.nickname}</p><p className="text-[10px] text-accent font-bold">{item.role}</p></div></div><div className="flex items-center gap-2"><span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span><button className="text-red-400 text-lg font-bold hover:text-red-300 px-2" onClick={()=>revokeCode(item.id)} title="Revoke">✕</button></div></div>)}</div></div>}
+        {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm font-bold text-gray-400">Active Invite Codes</p></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{inviteCodes.map(item=><div key={item.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between"><div className="flex items-center gap-3"><img src={item.pfp||avatarFallback(item.nickname)} className="w-8 h-8 rounded-full object-cover border border-gray-600" alt=""/><div><p className="text-xs font-bold text-white">{item.nickname}</p><p className="text-[10px] text-accent font-bold">{item.role}</p>{item.game_title && <p className="text-[10px] text-cyan-400 font-bold">Gra: {item.game_title}</p>}</div></div><div className="flex items-center gap-2"><span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span><button className="text-red-400 text-lg font-bold hover:text-red-300 px-2" onClick={()=>revokeCode(item.id)} title="Revoke">✕</button></div></div>)}</div></div>}
         <div className="mb-12"><h3 className="text-xl font-bold mb-4 text-gray-300">Manage Reviews</h3>{reviews.length===0?<div className="glass rounded-xl p-10 text-center text-gray-500 font-bold">No reviews in database.</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.map(r=><ReviewCard key={r.id} review={r} admin onEdit={openReviewModal} onDelete={deleteReview} onTogglePublish={togglePublish}/>)}</div>}</div>
     </div>;
 }
@@ -558,11 +624,12 @@ function GenerateCodeModal({onClose,onCreated,onError,onToast}){
         const form=new FormData(e.currentTarget);
         const nickname=String(form.get('nickname')||'').trim();
         const role=String(form.get('role')||'').trim();
+        const gameTitle=String(form.get('game_title')||'').trim();
         if(!nickname||!role||!client)return;
         setCodeBusy(true);
         for(let attempt=0;attempt<8;attempt++){
             const code=Math.random().toString(36).slice(2,8).toUpperCase();
-            const {error}=await client.from('invite_codes').insert({code,nickname,role,avatar_url:codeAvatar||null,used:false});
+            const {error}=await client.from('invite_codes').insert({code,nickname,role,game_title:gameTitle||null,avatar_url:codeAvatar||null,used:false});
             if(!error){setCodeBusy(false);onToast(`Generated code: ${code}`);await onCreated();return;}
             if(error.code!=='23505'){setCodeBusy(false);return onError(error.message)}
         }
@@ -583,6 +650,7 @@ function GenerateCodeModal({onClose,onCreated,onError,onToast}){
                 </Field>
                 <Field label="Nickname"><input name="nickname" className="form-input" required /></Field>
                 <Field label="Role (e.g. Developer)"><input name="role" className="form-input" required /></Field>
+                <Field label="Nazwa gry (np. Cyberpunk 2077)"><input name="game_title" className="form-input" placeholder="Opcjonalnie" /></Field>
                 <div className="flex gap-4 pt-2">
                     <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button>
                     <button disabled={codeBusy||codeAvatarBusy} className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-2 rounded">{codeBusy?'Generating…':'Generate'}</button>
@@ -598,6 +666,7 @@ function ReviewFormModal({review,onSave,onCancel,onError}){
         nickname:(review && review.nickname) || '',
         discord:(review && (review.discord || review.discord_username)) || '',
         role:(review && review.role) || '',
+        game_title:(review && review.game_title) || '',
         text:(review && (review.text || review.review_text)) || '',
         ratings:(review && Array.isArray(review.ratings)) ? review.ratings.map(r=>({...r})) : defaultCategories.map(c=>({...c})),
         published:(review && review.published != null) ? review.published : true
@@ -622,7 +691,16 @@ function ReviewFormModal({review,onSave,onCancel,onError}){
         if(!client)return;
         if(!formData.nickname.trim()||!formData.text.trim())return onError('Nickname and text are required.');
         setSaving(true);
-        const payload={nickname:formData.nickname.trim(),discord_username:formData.discord.trim()||null,role:formData.role.trim()||null,review_text:formData.text.trim(),avatar_url:formData.pfp.trim()||null,ratings:(formData.ratings||[]).map(r=>({category:String(r.category||'').trim(),value:Math.max(0,Math.min(5,Math.round(Number(r.value)*2)/2))})).filter(r=>r.category&&Number.isFinite(r.value)),published:!!formData.published};
+        const payload={
+            nickname:formData.nickname.trim(),
+            discord_username:formData.discord.trim()||null,
+            role:formData.role.trim()||null,
+            game_title:formData.game_title.trim()||null,
+            review_text:formData.text.trim(),
+            avatar_url:formData.pfp.trim()||null,
+            ratings:(formData.ratings||[]).map(r=>({category:String(r.category||'').trim(),value:Math.max(0,Math.min(5,Math.round(Number(r.value)*2)/2))})).filter(r=>r.category&&Number.isFinite(r.value)),
+            published:!!formData.published
+        };
         const result=review?await client.from('reviews').update(payload).eq('id',review.id):await client.from('reviews').insert(payload);
         setSaving(false);
         if(result.error)return onError(result.error.message);
@@ -644,6 +722,7 @@ function ReviewFormModal({review,onSave,onCancel,onError}){
                     <Field label="Nickname"><input value={formData.nickname} onChange={e=>setFormData({...formData,nickname:e.target.value})} className="form-input" required /></Field>
                     <Field label="Discord"><input value={formData.discord} onChange={e=>setFormData({...formData,discord:e.target.value})} className="form-input" /></Field>
                     <Field label="Role"><input value={formData.role} onChange={e=>setFormData({...formData,role:e.target.value})} className="form-input" /></Field>
+                    <Field label="Nazwa gry"><input value={formData.game_title} onChange={e=>setFormData({...formData,game_title:e.target.value})} className="form-input" /></Field>
                 </div>
                 <Field label="Review Text"><textarea value={formData.text} onChange={e=>setFormData({...formData,text:e.target.value})} className="form-input h-28 font-medium" required /></Field>
                 <div className="p-4 bg-gray-900 rounded border border-gray-700">
@@ -667,7 +746,7 @@ function ReviewFormModal({review,onSave,onCancel,onError}){
 }
 
 function ProjectFormModal({project,reviews,onSave,onCancel}){
-    const [formData,setFormData]=useState(()=>project?{...project,pinnedReviews:project.pinnedReviews||[]}:{title:'',steamLink:'',details:'',pinnedReviews:[]});
+    const [formData,setFormData]=useState(()=>project?{...project,pinnedReviews:project.pinnedReviews||[],pinned:!!project.pinned,sort_order:project.sort_order||0}:{title:'',steamLink:'',details:'',pinnedReviews:[],pinned:false,sort_order:0});
     const togglePin=revId=>setFormData(f=>({...f,pinnedReviews:f.pinnedReviews.includes(revId)?f.pinnedReviews.filter(id=>id!==revId):[...f.pinnedReviews,revId]}));
     const handleSubmit=e=>{e.preventDefault();if(!formData.title.trim())return alert('Title is required.');onSave(formData)};
     return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4 overflow-y-auto">
@@ -677,11 +756,17 @@ function ProjectFormModal({project,reviews,onSave,onCancel}){
                 <Field label="Game Title"><input type="text" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})} className="form-input" required/></Field>
                 <Field label="Steam Link"><input type="url" value={formData.steamLink} onChange={e=>setFormData({...formData,steamLink:e.target.value})} className="form-input" placeholder="https://store.steampowered.com/app/..." /></Field>
                 <Field label="Translation details"><textarea value={formData.details} onChange={e=>setFormData({...formData,details:e.target.value})} className="form-input h-32 font-medium" /></Field>
+                <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer text-white font-bold text-sm">
+                        <input type="checkbox" checked={formData.pinned} onChange={e=>setFormData({...formData,pinned:e.target.checked})} className="w-4 h-4 accent-accent rounded"/>
+                        Przypnij projekt na samej górze
+                    </label>
+                </div>
                 <div>
                     <label className="block text-sm font-bold text-accent mb-2">Pin reviews to this project</label>
                     <div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">
                         {reviews.map(rev=><label key={rev.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-800 rounded"><input type="checkbox" checked={formData.pinnedReviews.includes(rev.id)} onChange={()=>togglePin(rev.id)} className="w-4 h-4 accent-accent"/><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-6 h-6 rounded-full object-cover" alt=""/><span className="text-sm font-bold text-white">{rev.nickname}</span><span className="text-xs text-gray-500 font-medium truncate max-w-[200px]">"{rev.text}"</span></label>)}
-                        {reviews.length===0&&<p className="text-xs text-gray-500 font-bold">No feedbacks.</p>}
+                        {reviews.length===0&&<p className="text-xs text-gray-500 font-bold">No reviews.</p>}
                     </div>
                 </div>
                 <div className="flex gap-4 pt-4 border-t border-gray-700">
