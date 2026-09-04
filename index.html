@@ -1,123 +1,518 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M3owL - Polish Translator Portfolio</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: { dark: '#0f172a', darker: '#020617', accent: '#06b6d4' },
-          animation: { scroll: 'scroll 30s linear infinite' },
-          keyframes: { scroll: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } } }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3owL - Polish Translator Portfolio</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        accent: '#06b6d4'
+                    },
+                    animation: { 'scroll': 'scroll 30s linear infinite' },
+                    keyframes: {
+                        scroll: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        }
+                    }
+                }
+            }
         }
-      }
-    };
-  </script>
-  <style>
-    body{background:#020617;color:#f8fafc;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;overflow-x:hidden}
-    .glass{background:rgba(30,41,59,.75);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1)}
-    .marquee-container{display:flex;width:max-content}.marquee-container:hover{animation-play-state:paused}
-    .star-button{font-size:1.35rem;line-height:1;width:1.5rem;height:1.7rem;padding:0;border:0;background:transparent;cursor:pointer;user-select:none}
-    .form-input{width:100%;background:#111827;border:1px solid #374151;border-radius:.375rem;padding:.55rem .65rem;color:#fff}
-    .form-input:focus{border-color:#06b6d4;outline:none}
-  </style>
+    </script>
+    <style>
+        body { background-color:#020617;color:#f8fafc;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;overflow-x:hidden }
+        .glass { background:rgba(30,41,59,.75);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1) }
+        .hide-scrollbar::-webkit-scrollbar { display:none }
+        .hide-scrollbar { -ms-overflow-style:none;scrollbar-width:none }
+        .marquee-container { display:flex;width:max-content }
+        .marquee-container:hover { animation-play-state:paused }
+        .star-button { font-size:1.35rem;line-height:1;width:1.5rem;height:1.7rem;padding:0;border:0;background:transparent;cursor:pointer;user-select:none }
+        .form-input { width:100%;background:#111827;border:1px solid #374151;border-radius:.375rem;padding:.55rem .65rem;color:#fff }
+        .form-input:focus { border-color:#06b6d4;outline:none }
+    </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useMemo}=React;
+const { useState, useEffect, useMemo } = React;
 
-const SUPABASE_URL='https://empvklffqwrlllovhgzx.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_an1FqOGAgwRQCzxp6UWuvQ_TFadZ9EW';
-const supabaseConfigured=SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('YOUR_')&&SUPABASE_PUBLISHABLE_KEY&&!SUPABASE_PUBLISHABLE_KEY.includes('YOUR_');
-const supabase=supabaseConfigured?window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
-const DEFAULT_CATEGORIES=[{category:'Speed',value:5},{category:'Communication',value:5},{category:'Professionalism',value:5},{category:'Reliability',value:5}];
+/* ============================================================
+   SUPABASE CONFIG
+   ============================================================ */
+const SUPABASE_URL = 'https://empvklffqwrlllovhgzx.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_an1FqOGAgwRQCzxp6UWuvQ_TFadZ9EW';
+const supabaseConfigured = SUPABASE_URL.startsWith('https://') && !!SUPABASE_PUBLISHABLE_KEY;
+const supabase = supabaseConfigured
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+      })
+    : null;
 
-function App(){
- const[activeTab,setActiveTab]=useState('portfolio');
- const[reviews,setReviews]=useState([]); const[projects,setProjects]=useState([]); const[loading,setLoading]=useState(true);
- const[session,setSession]=useState(null); const[isAdmin,setIsAdmin]=useState(false); const[error,setError]=useState(''); const[toast,setToast]=useState(''); const[showLogin,setShowLogin]=useState(false); const[configured,setConfigured]=useState(supabaseConfigured);
- const[inviteCodes,setInviteCodes]=useState([]);
+const defaultCategories = [
+    { category:'Speed', value:5 },
+    { category:'Communication', value:5 },
+    { category:'Professionalism', value:5 },
+    { category:'Reliability', value:5 }
+];
 
- const loadReviews=async(adminView=false)=>{if(!supabase)return; let q=supabase.from('reviews').select('*').order('created_at',{ascending:false}); if(!adminView)q=q.eq('published',true); const{data,error}=await q;if(error)return setError(error.message);setReviews(data||[])};
- const loadProjects=async()=>{if(!supabase)return;const{data,error}=await supabase.from('projects').select('*').order('created_at',{ascending:false});if(error)return setError(error.message);setProjects(data||[])};
- const loadInviteCodes=async()=>{if(!supabase)return;const{data,error}=await supabase.from('invite_codes').select('*').eq('used',false).order('created_at',{ascending:false});if(error)return setError(error.message);setInviteCodes(data||[])};
- const checkAdmin=async(s)=>{if(!supabase||!s?.user){setIsAdmin(false);return false}const{data,error}=await supabase.from('admin_users').select('user_id').eq('user_id',s.user.id).maybeSingle();const ok=!error&&!!data;setIsAdmin(ok);return ok};
-
- useEffect(()=>{
-  if(!supabaseConfigured){setConfigured(false);setLoading(false);return}
-  let alive=true;
-  (async()=>{const{data:{session:s}}=await supabase.auth.getSession();if(!alive)return;setSession(s);const admin=await checkAdmin(s);await Promise.all([loadReviews(admin),loadProjects(),admin?loadInviteCodes():Promise.resolve()]);setLoading(false)})();
-  const{data:authSub}=supabase.auth.onAuthStateChange(async(_,s)=>{setSession(s);const admin=await checkAdmin(s);await loadReviews(admin);if(admin)await loadInviteCodes()});
-  const channel=supabase.channel('m3owl-live').on('postgres_changes',{event:'*',schema:'public',table:'reviews'},async()=>{await loadReviews(isAdmin)}).on('postgres_changes',{event:'*',schema:'public',table:'projects'},loadProjects).on('postgres_changes',{event:'*',schema:'public',table:'invite_codes'},()=>{if(isAdmin)loadInviteCodes()}).subscribe();
-  return()=>{alive=false;authSub?.subscription?.unsubscribe();supabase.removeChannel(channel)};
- },[]);
- useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),2500);return()=>clearTimeout(t)},[toast]);
-
- const logout=async()=>{if(supabase)await supabase.auth.signOut();setSession(null);setIsAdmin(false);setActiveTab('reviews');setToast('Logged out.')};
- const onLogin=async(s)=>{setSession(s);const admin=await checkAdmin(s);if(!admin){await supabase.auth.signOut();return setError('This account is not an admin.')}await Promise.all([loadReviews(true),loadInviteCodes()]);setShowLogin(false);setActiveTab('admin');setToast('Logged in.')};
- return <div className="min-h-screen flex flex-col">
-  <header className="glass sticky top-0 z-40 py-4 px-5 md:px-8 border-b border-gray-800"><div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
-   <button onClick={()=>setActiveTab('about')} className="text-left"><h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent to-blue-500">M3owL</h1><p className="text-sm text-gray-400">Jakub K. | Discord: <span className="text-white font-mono">_m3owl</span> | Junior Polish Game Translator</p></button>
-   <nav className="flex flex-wrap items-center gap-2 md:gap-5 font-bold">{[['about','About Me'],['portfolio','Portfolio'],['reviews','Reviews']].map(([id,label])=><button key={id} onClick={()=>setActiveTab(id)} className={`px-2 py-2 ${activeTab===id?'text-accent':'text-gray-400 hover:text-white'}`}>{label}</button>)}
-    {isAdmin?<><button onClick={()=>setActiveTab('admin')} className={`px-3 py-2 rounded-lg text-sm ${activeTab==='admin'?'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20':'text-gray-400 hover:text-white'}`}>Admin Panel</button><button onClick={logout} className="bg-red-900/80 hover:bg-red-800 text-white px-3 py-2 rounded border border-red-600 text-sm">Logout</button></>:<button onClick={()=>setShowLogin(true)} className="text-sm text-gray-500 hover:text-white">Admin</button>}
-   </nav>
-  </div></header>
-  <main className="flex-grow p-5 md:p-8 max-w-7xl mx-auto w-full">
-   {!configured&&<div className="mb-8 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm"><strong>Setup required:</strong> put your Supabase URL and publishable key at the top of index.html.</div>}
-   {error&&<div className="mb-8 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-sm">{error}<button className="float-right" onClick={()=>setError('')}>×</button></div>}
-   {loading?<div className="py-24 text-center text-gray-500">Loading…</div>:<>{activeTab==='about'&&<AboutMe/>}{activeTab==='portfolio'&&<PortfolioTab projects={projects} setProjects={setProjects} reviews={reviews} isAdmin={isAdmin} onChanged={()=>loadProjects()}/>} {activeTab==='reviews'&&<ReviewsTab reviews={reviews} isAdmin={isAdmin}/>} {activeTab==='admin'&&isAdmin&&<AdminTab reviews={reviews} inviteCodes={inviteCodes} reloadReviews={()=>loadReviews(true)} reloadPublic={()=>loadReviews(false)} reloadCodes={loadInviteCodes} onError={setError} onToast={setToast}/>}</>}
-  </main>
-  <footer className="max-w-7xl mx-auto w-full px-5 md:px-8 pb-8 text-xs text-gray-600">M3owL · Polish Game Translator · _m3owl</footer>
-  {showLogin&&<LoginModal onCancel={()=>setShowLogin(false)} onSuccess={onLogin}/>} {toast&&<div className="fixed bottom-5 right-5 z-[100] glass rounded-xl px-4 py-3 text-sm font-bold text-gray-200 shadow-2xl">{toast}</div>}
- </div>
+function renderStars(rating) {
+    const value = Number(rating) || 0;
+    const stars = [];
+    for (let i=1;i<=5;i++) {
+        if (i <= Math.floor(value)) {
+            stars.push(<span key={i} className="text-yellow-400">★</span>);
+        } else if (i === Math.ceil(value) && value % 1 !== 0) {
+            const percentage = (value % 1) * 100;
+            stars.push(
+                <span key={i} className="relative inline-block text-gray-600">
+                    ★
+                    <span className="absolute top-0 left-0 overflow-hidden text-yellow-400" style={{width:`${percentage}%`}}>★</span>
+                </span>
+            );
+        } else {
+            stars.push(<span key={i} className="text-gray-600">★</span>);
+        }
+    }
+    return <div className="flex gap-0.5 items-center">{stars}</div>;
 }
 
-function AboutMe(){return <div className="animate-fade-in max-w-3xl mx-auto space-y-6"><h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">About Me</h2><div className="glass p-8 rounded-xl"><h3 className="text-2xl font-bold text-accent mb-4">Hello, I'm M3owL</h3><p className="text-gray-300 text-lg leading-relaxed mb-4">I am a Junior Polish Game Translator focusing on video games and game-development communities. I translate with attention to context, terminology, consistency and how the text actually feels to a Polish player.</p><p className="text-gray-300 text-lg leading-relaxed">I help developers reach Polish players through accurate, natural and context-aware game translations.</p><div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2"><p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p><p><strong className="text-white">Role:</strong> Polish Game Translator / Localization Junior</p></div></div></div>}
-
-function PortfolioTab({projects,setProjects,reviews,isAdmin,onChanged}){
- const[show,setShow]=useState(false),[editing,setEditing]=useState(null);
- const open=(p=null)=>{setEditing(p);setShow(true)};
- const save=async(data)=>{if(!supabase)return;if(editing){const{error}=await supabase.from('projects').update({title:data.title,steam_url:data.steamLink,details:data.details,pinned_reviews:data.pinnedReviews||[]}).eq('id',editing.id);if(error)throw error}else{const{error}=await supabase.from('projects').insert({title:data.title,steam_url:data.steamLink||null,details:data.details||'',pinned_reviews:data.pinnedReviews||[]});if(error)throw error}await onChanged();setShow(false)};
- const del=async id=>{if(!confirm('Delete this project permanently?'))return;const{error}=await supabase.from('projects').delete().eq('id',id);if(error)alert(error.message);else onChanged()};
- return <div><div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold">Portfolio</h2>{isAdmin&&<button onClick={()=>open()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded">+ Add Project</button>}</div>{projects.length===0?<p className="text-gray-500 text-xl text-center mt-12">No projects added yet.</p>:<div className="space-y-12">{projects.map(project=>{const appId=getSteamAppId(project.steam_url);const banner=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;const logo=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;return <div key={project.id} className="glass rounded-xl overflow-hidden shadow-2xl border border-gray-700 relative">{banner&&<div className="absolute inset-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${banner})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"/></div>}<div className="p-8 relative z-10"><div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6"><div className="flex items-center gap-4">{logo&&<img src={logo} alt="Game Logo" className="max-h-16 max-w-[200px] object-contain" onError={e=>e.currentTarget.style.display='none'}/>}<div><h3 className="text-3xl font-bold mb-1">{project.title}</h3>{project.steam_url&&<a href={project.steam_url} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold">🔗 Steam Store Page</a>}</div></div>{isAdmin&&<div className="flex gap-2"><button onClick={()=>open({id:project.id,title:project.title,steamLink:project.steam_url||'',details:project.details||'',pinnedReviews:project.pinned_reviews||[]})} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button><button onClick={()=>del(project.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button></div>}</div><div className="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">{project.details}</div></div>{project.pinned_reviews?.length>0&&<PinnedReviewsSection ids={project.pinned_reviews} reviews={reviews}/>}</div>})}</div>}{show&&<ProjectFormModal project={editing} reviews={reviews} onSave={save} onCancel={()=>setShow(false)}/>}</div>
+function calculateAverageRating(ratings) {
+    if (!Array.isArray(ratings) || ratings.length===0) return 0;
+    const values = ratings.map(r=>Number(r.value)).filter(Number.isFinite);
+    if (!values.length) return 0;
+    return values.reduce((a,b)=>a+b,0)/values.length;
 }
-function PinnedReviewsSection({ids,reviews}){const pinned=ids.map(id=>reviews.find(r=>r.id===id)).filter(Boolean);if(!pinned.length)return null;return <div className="bg-gray-900/90 border-t border-gray-800 p-4 overflow-hidden"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Related Reviews</p><div className="flex flex-wrap gap-3">{pinned.map(r=><div key={r.id} className="w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4"><div className="flex items-start justify-between gap-3 mb-2"><div className="flex items-center gap-3"><img src={r.avatar_url||avatarFallback(r.nickname)} className="w-8 h-8 rounded-full object-cover" alt=""/><div><p className="text-sm font-bold">{r.nickname}</p><p className="text-xs text-accent">{r.role}</p></div></div><Stars value={averageRating(r.ratings)}/></div><p className="text-xs text-gray-300 italic line-clamp-2">“{r.review_text}”</p></div>)}</div></div>}
 
-function ReviewsTab({reviews,isAdmin}){const[showCode,setShowCode]=useState(false);return <div><div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold">Reviews & Testimonials</h2><p className="text-gray-500 mt-2">Feedback from developers and gaming community staff.</p></div>{!isAdmin&&<button onClick={()=>setShowCode(true)} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700">Have an invite code?</button></div>{reviews.length===0?<p className="text-gray-500 text-xl text-center mt-12">No published reviews yet.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.filter(r=>r.published||isAdmin).map(r=><ReviewCard key={r.id} review={r}/>)}<div>{showCode&&<InviteCodeModal onClose={()=>setShowCode(false)} onSubmitted={()=>setShowCode(false)}/>}</div>}</div>}
-function InviteCodeModal({onClose,onSubmitted}){const[code,setCode]=useState(''),[data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reviewText,setReviewText]=useState('');const verify=async e=>{e.preventDefault();if(!supabase)return;setBusy(true);setError('');const{data:d,error}=await supabase.rpc('get_invite_code_preview',{input_code:code.trim().toUpperCase()});setBusy(false);if(error||!d||!d.length)return setError('Invalid or already used invite code.');setData(d[0]);};const submit=async e=>{e.preventDefault();if(!data||!reviewText.trim())return;setBusy(true);setError('');const{error}=await supabase.rpc('submit_review_with_code',{input_code:code.trim().toUpperCase(),input_discord_username:data.discord_username||null,input_review_text:reviewText.trim()});setBusy(false);if(error)return setError(error.message);alert('Review submitted. It will appear after admin approval.');onSubmitted()};return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Use Invite Code</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl">×</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Invite code"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent text-darker font-bold py-2 rounded">{busy?'Checking…':'Verify code'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 text-sm"><b>{data.nickname}</b><div className="text-accent text-xs">{data.role}</div></div><Field label="Your review"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={busy} className="flex-1 bg-accent text-darker font-bold py-2 rounded">{busy?'Sending…':'Submit review'}</button></div></form>}</div></div>}\n\nfunction ReviewCard({review,admin,onEdit,onDelete,onTogglePublish}){const a=averageRating(review.ratings);return <div className={`glass rounded-xl p-6 shadow-xl flex flex-col ${admin&&!review.published?'opacity-50 grayscale border-dashed':''}`}><div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4 gap-4"><div className="flex items-center gap-4 min-w-0"><img src={review.avatar_url||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>e.currentTarget.src=avatarFallback(review.nickname)}/><div className="min-w-0"><h3 className="text-lg font-bold truncate">{review.nickname}</h3><p className="text-xs text-accent font-semibold truncate">{review.role||'Game Developer'}</p>{review.discord_username&&<p className="text-[10px] text-gray-500 truncate">{review.discord_username}</p>}<p className="text-[10px] text-gray-500 mt-1">{formatDate(review.created_at)}</p></div></div>{review.ratings?.length>0&&<div className="text-right flex-shrink-0"><div className="text-sm font-mono font-bold text-yellow-400">{a.toFixed(1)} / 5</div><Stars value={a}/></div>}</div><p className="text-gray-300 text-sm italic flex-grow mb-6">“{review.review_text}”</p>{review.ratings?.length>0&&<div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">{review.ratings.map((r,i)=><div key={i} className="flex justify-between items-center gap-3"><span className="text-xs font-semibold text-gray-400">{r.category}</span><div className="flex items-center gap-2"><span className="text-yellow-400 text-xs font-mono">{Number(r.value).toFixed(1)}</span><Stars value={Number(r.value)}/></div></div>)}</div>}{admin&&<div className="flex gap-2 mt-auto border-t border-gray-700 pt-4"><button onClick={()=>onTogglePublish(review.id,!review.published)} className="flex-1 text-xs py-2 rounded font-bold bg-gray-700 text-gray-300">{review.published?'Unpublish':'Publish'}</button><button onClick={()=>onEdit(review)} className="flex-1 bg-blue-900/50 text-blue-400 rounded text-xs font-bold py-2">Edit</button><button onClick={()=>onDelete(review.id)} className="flex-1 bg-red-900/50 text-red-400 rounded text-xs font-bold py-2">Delete</button></div>}</div>}
+function formatDate(dateString) {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+}
 
-function AdminTab({reviews,inviteCodes,reloadReviews,reloadPublic,reloadCodes,onError,onToast}){const[editing,setEditing]=useState(null),[showForm,setShowForm]=useState(false),[loading,setLoading]=useState(false);
- const del=async id=>{if(!confirm('Delete this review permanently?'))return;const{error}=await supabase.from('reviews').delete().eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(),reloadPublic()]);onToast('Review deleted.')};
- const toggle=async(id,published)=>{const{error}=await supabase.from('reviews').update({published}).eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(),reloadPublic()]);onToast(published?'Review published.':'Review hidden.')};
- const saveCode=async(data)=>{const{error}=await supabase.from('invite_codes').insert({code:data.code,nickname:data.nickname,role:data.role,avatar_url:data.avatar_url||null});if(error)return onError(error.message);await reloadCodes();onToast('Invite code created.')};
- return <div><div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold">Admin Panel</h2><p className="text-gray-500 mt-2">Everything here is stored in Supabase.</p></div><div className="flex gap-2"><button onClick={()=>{setEditing(null);setShowForm(true)}} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-5 py-2 rounded">+ Add Review</button><button onClick={()=>{const c=prompt('Reviewer nickname');if(!c)return;const role=prompt('Reviewer role');if(!role)return;const code=Math.random().toString(36).slice(2,8).toUpperCase();saveCode({code,nickname:c,role})}} className="bg-purple-900/50 text-purple-300 border border-purple-800 px-4 py-2 rounded font-bold">+ Invite Code</button></div></div>
- {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><p className="text-sm font-bold text-gray-400 mb-3">Unused Invite Codes</p><div className="flex flex-wrap gap-3">{inviteCodes.map(c=><div key={c.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center gap-3"><span className="text-xs text-white">{c.nickname}</span><span className="text-xs text-accent font-mono font-bold">{c.code}</span><button className="text-red-400 text-xs" onClick={async()=>{const{error}=await supabase.from('invite_codes').delete().eq('id',c.id);if(error)onError(error.message);else reloadCodes()}}>×</button></div>)}</div></div>}
- {reviews.length===0?<div className="glass rounded-xl p-10 text-center text-gray-500">No reviews in the database.</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.map(r=><ReviewCard key={r.id} review={r} admin onEdit={r=>{setEditing(r);setShowForm(true)}} onDelete={del} onTogglePublish={toggle}/>)}</div>}
- {showForm&&<ReviewEditor review={editing} preload={editing?.used?editing:null} onCancel={()=>setShowForm(false)} onSaved={async()=>{setShowForm(false);await Promise.all([reloadReviews(),reloadPublic()]);onToast(editing?'Review updated.':'Review created.')}} onError={onError}/>}</div>}
+function getSteamAppId(url) {
+    if (!url) return null;
+    const match = url.match(/\/app\/(\d+)/);
+    return match ? match[1] : null;
+}
 
-function LoginModal({onCancel,onSuccess}){const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);const login=async e=>{e.preventDefault();if(!supabase)return;setBusy(true);setError('');const{data,error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)return setError(error.message);onSuccess(data.session)};return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-8 rounded-xl w-full max-w-md border border-gray-700"><div className="flex justify-between"><h2 className="text-2xl font-bold text-accent mb-6">Admin Login</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={login} className="space-y-4"><Field label="Email"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="form-input" required/></Field><Field label="Password"><input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="form-input" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button disabled={busy} className="flex-1 bg-accent text-darker font-bold py-2 rounded">{busy?'Logging in…':'Login'}</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button></div></form></div></div>}
+function avatarFallback(name) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=0f172a&color=fff`;
+}
 
-function ReviewEditor({review,onCancel,onSaved,onError,preload}){const[form,setForm]=useState(()=>({nickname:review?.nickname||preload?.nickname||'',discord_username:review?.discord_username||'',role:review?.role||preload?.role||'',review_text:review?.review_text||'',avatar_url:review?.avatar_url||preload?.avatar_url||'',ratings:Array.isArray(review?.ratings)?review.ratings:DEFAULT_CATEGORIES.map(x=>({...x})),published:review?.published??true}));const[saving,setSaving]=useState(false),[uploading,setUploading]=useState(false);const avg=useMemo(()=>averageRating(form.ratings),[form.ratings]);
- const upload=async file=>{if(!file||!supabase)return;if(file.size>6*1024*1024)return onError('Avatar must be under 6 MB.');setUploading(true);const path=`${crypto.randomUUID()}-${file.name.toLowerCase().replace(/[^a-z0-9._-]/g,'-')}`;const{error}=await supabase.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});if(error){setUploading(false);return onError(error.message)}const{data}=supabase.storage.from('review-avatars').getPublicUrl(path);setForm(f=>({...f,avatar_url:data.publicUrl}));setUploading(false)};
- const save=async e=>{e.preventDefault();if(!supabase)return;if(!form.nickname.trim()||!form.review_text.trim())return onError('Nickname and review text are required.');setSaving(true);const payload={nickname:form.nickname.trim(),discord_username:form.discord_username.trim()||null,role:form.role.trim()||null,review_text:form.review_text.trim(),avatar_url:form.avatar_url.trim()||null,ratings:form.ratings.map(r=>({category:String(r.category||'').trim(),value:Math.max(0,Math.min(5,Math.round(Number(r.value)*2)/2))})).filter(r=>r.category&&Number.isFinite(r.value)),published:!!form.published};const result=review?await supabase.from('reviews').update(payload).eq('id',review.id):await supabase.from('reviews').insert(payload);setSaving(false);if(result.error)return onError(result.error.message);await onSaved()};
- return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 overflow-y-auto"><div className="glass p-6 md:p-8 rounded-xl w-full max-w-3xl border border-gray-700 max-h-[94vh] overflow-y-auto"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">{review?'Edit Review':'Add Review'}</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={save} className="space-y-5"><div className="grid md:grid-cols-2 gap-4"><Field label="Reviewer nickname"><input value={form.nickname} onChange={e=>setForm({...form,nickname:e.target.value})} className="form-input" required/></Field><Field label="Discord username"><input value={form.discord_username} onChange={e=>setForm({...form,discord_username:e.target.value})} className="form-input"/></Field><Field label="Role"><input value={form.role} onChange={e=>setForm({...form,role:e.target.value})} className="form-input" placeholder="Community Manager"/></Field><Field label="Reviewer avatar"><input type="file" accept="image/*" disabled={uploading} onChange={e=>upload(e.target.files?.[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-sm"/>{uploading&&<div className="text-xs text-gray-500 mt-2">Uploading…</div>}{form.avatar_url&&<img src={form.avatar_url} className="w-12 h-12 rounded-full object-cover mt-3" alt=""/>}</Field></div><Field label="Review text"><textarea value={form.review_text} onChange={e=>setForm({...form,review_text:e.target.value})} className="form-input min-h-36" required/></Field><div className="p-4 bg-gray-900 rounded border border-gray-700"><div className="flex justify-between items-center mb-4"><div><div className="text-sm font-bold text-accent">Ratings · Average: {avg.toFixed(1)} / 5</div><div className="text-xs text-gray-500">Click the left/right half of a star for 0.5 steps.</div></div><button type="button" onClick={()=>setForm(f=>({...f,ratings:[...f.ratings,{category:'New category',value:5}]}))} className="text-xs bg-gray-800 border border-gray-700 rounded px-3 py-2 font-bold">+ Add category</button></div><div className="space-y-3">{form.ratings.map((r,i)=><div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2"><input value={r.category} onChange={e=>{const a=[...form.ratings];a[i]={...a[i],category:e.target.value};setForm({...form,ratings:a})}} className="bg-gray-950 border border-gray-700 rounded p-2 text-white text-sm min-w-0"/><InteractiveStars value={Number(r.value)} onChange={v=>{const a=[...form.ratings];a[i]={...a[i],value:v};setForm({...form,ratings:a})}}/><div className="flex items-center gap-2"><span className="text-xs text-yellow-400 font-mono">{Number(r.value).toFixed(1)}</span><button type="button" onClick={()=>setForm(f=>({...f,ratings:f.ratings.filter((_,n)=>n!==i)}))} className="text-red-400">×</button></div></div>)}</div></div><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={form.published} onChange={e=>setForm({...form,published:e.target.checked})}/>Publish immediately</label><div className="flex gap-3 pt-2 border-t border-gray-700"><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={saving||uploading} className="flex-1 bg-accent disabled:opacity-50 text-darker font-bold py-2 rounded">{saving?'Saving…':'Save Review'}</button></div></form></div></div>}
-function ProjectFormModal({project,reviews,onSave,onCancel}){const[form,setForm]=useState(project||{title:'',steamLink:'',details:'',pinnedReviews:[]});const save=async e=>{e.preventDefault();try{await onSave(form)}catch(err){alert(err.message)}};return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[80] p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700"><h2 className="text-2xl font-bold mb-6 text-accent">{project?'Edit Project':'New Project'}</h2><form onSubmit={save} className="space-y-4"><Field label="Game Title"><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} className="form-input" required/></Field><Field label="Steam URL"><input value={form.steamLink} onChange={e=>setForm({...form,steamLink:e.target.value})} className="form-input"/></Field><Field label="Translation Details"><textarea value={form.details} onChange={e=>setForm({...form,details:e.target.value})} className="form-input h-32"/></Field><div><label className="block text-sm font-bold text-accent mb-2">Pin Reviews to this Project</label><div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">{reviews.map(r=><label key={r.id} className="flex items-center gap-3 p-2 hover:bg-gray-800 rounded"><input type="checkbox" checked={(form.pinnedReviews||[]).includes(r.id)} onChange={()=>{const p=(form.pinnedReviews||[]).includes(r.id)?form.pinnedReviews.filter(id=>id!==r.id):[...(form.pinnedReviews||[]),r.id];setForm({...form,pinnedReviews:p})}}/><img src={r.avatar_url||avatarFallback(r.nickname)} className="w-6 h-6 rounded-full object-cover" alt=""/><span className="text-sm font-bold truncate">{r.nickname}</span></label>)}{reviews.length===0&&<p className="text-xs text-gray-500">No reviews available.</p>}</div></div><div className="flex gap-4 pt-4 border-t border-gray-700"><button type="submit" className="flex-1 bg-accent text-darker font-bold py-2 rounded">Save Project</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button></div></form></div></div>}
+function normalizeProject(p) {
+    return {
+        ...p,
+        steamLink: p.steamLink ?? p.steam_url ?? '',
+        details: p.details ?? '',
+        pinnedReviews: p.pinnedReviews ?? p.pinned_reviews ?? []
+    };
+}
+
+function normalizeReview(r) {
+    return {
+        ...r,
+        pfp: r.pfp ?? r.avatar_url ?? '',
+        discord: r.discord ?? r.discord_username ?? '',
+        text: r.text ?? r.review_text ?? '',
+        date: r.date ?? r.created_at ?? '',
+        ratings: Array.isArray(r.ratings) ? r.ratings : []
+    };
+}
+
+function normalizeCode(c) {
+    return {
+        ...c,
+        pfp: c.pfp ?? c.avatar_url ?? '',
+        used: !!c.used
+    };
+}
+
+function App() {
+    const [reviews,setReviews] = useState([]);
+    const [projects,setProjects] = useState([]);
+    const [inviteCodes,setInviteCodes] = useState([]);
+    const [isAdmin,setIsAdmin] = useState(false);
+    const [session,setSession] = useState(null);
+    const [showAuth,setShowAuth] = useState(false);
+    const [activeTab,setActiveTab] = useState('portfolio');
+    const [loading,setLoading] = useState(true);
+    const [error,setError] = useState('');
+    const [toast,setToast] = useState('');
+
+    const loadReviews = async (adminView=isAdmin) => {
+        if (!supabase) return;
+        let query = supabase.from('reviews').select('*').order('created_at',{ascending:false});
+        if (!adminView) query = query.eq('published',true);
+        const {data,error} = await query;
+        if (error) { setError(error.message); return; }
+        setReviews((data || []).map(normalizeReview));
+    };
+
+    const loadProjects = async () => {
+        if (!supabase) return;
+        const {data,error} = await supabase.from('projects').select('*').order('created_at',{ascending:false});
+        if (error) { setError(error.message); return; }
+        setProjects((data || []).map(normalizeProject));
+    };
+
+    const loadInviteCodes = async () => {
+        if (!supabase || !isAdmin) return;
+        const {data,error} = await supabase.from('invite_codes').select('*').eq('used',false).order('created_at',{ascending:false});
+        if (error) { setError(error.message); return; }
+        setInviteCodes((data || []).map(normalizeCode));
+    };
+
+    const checkAdmin = async (currentSession) => {
+        if (!supabase || !currentSession?.user) {
+            setIsAdmin(false);
+            return false;
+        }
+        const {data,error} = await supabase.from('admin_users').select('user_id').eq('user_id',currentSession.user.id).maybeSingle();
+        const ok = !error && !!data;
+        setIsAdmin(ok);
+        return ok;
+    };
+
+    useEffect(() => {
+        if (!supabaseConfigured) { setError('Supabase is not configured.'); setLoading(false); return; }
+        let alive = true;
+        (async () => {
+            const {data:{session:currentSession}} = await supabase.auth.getSession();
+            if (!alive) return;
+            setSession(currentSession);
+            const admin = await checkAdmin(currentSession);
+            await Promise.all([loadReviews(admin), loadProjects()]);
+            if (admin) await loadInviteCodes();
+            setLoading(false);
+        })();
+
+        const {data:authSub} = supabase.auth.onAuthStateChange(async (_event,newSession) => {
+            setSession(newSession);
+            const admin = await checkAdmin(newSession);
+            await loadReviews(admin);
+            if (admin) await loadInviteCodes();
+            else setInviteCodes([]);
+        });
+
+        const channel = supabase.channel('m3owl-live')
+            .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},async () => {
+                const {data:{session:currentSession}} = await supabase.auth.getSession();
+                const admin = await checkAdmin(currentSession);
+                await loadReviews(admin);
+            })
+            .on('postgres_changes',{event:'*',schema:'public',table:'projects'},loadProjects)
+            .on('postgres_changes',{event:'*',schema:'public',table:'invite_codes'},loadInviteCodes)
+            .subscribe();
+
+        return () => {
+            alive = false;
+            authSub?.subscription?.unsubscribe();
+            supabase.removeChannel(channel);
+        };
+    },[]);
+
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(()=>setToast(''),2500);
+        return ()=>clearTimeout(t);
+    },[toast]);
+
+    const logout = async () => {
+        if (supabase) await supabase.auth.signOut();
+        setSession(null);
+        setIsAdmin(false);
+        setInviteCodes([]);
+        setActiveTab('reviews');
+        setToast('Logged out.');
+    };
+
+    const handleLoginSuccess = async (newSession) => {
+        setSession(newSession);
+        const admin = await checkAdmin(newSession);
+        if (!admin) {
+            await supabase.auth.signOut();
+            setError('This account is not an admin.');
+            return;
+        }
+        await Promise.all([loadReviews(true),loadProjects(),loadInviteCodes()]);
+        setShowAuth(false);
+        setActiveTab('admin');
+        setToast('Logged in.');
+    };
+
+    return (
+        <div className="min-h-screen flex flex-col relative">
+            <header className="glass sticky top-0 z-40 py-4 px-8 flex justify-between items-center border-b border-gray-800">
+                <div>
+                    <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent to-blue-500">M3owL</h1>
+                    <p className="text-sm text-gray-400">Jakub K. | Discord: <span className="text-white font-mono">_m3owl</span> | Junior Polish Game Translator</p>
+                </div>
+                <nav className="flex gap-6 font-bold">
+                    <button onClick={()=>setActiveTab('about')} className={`transition-colors ${activeTab==='about'?'text-accent':'text-gray-400 hover:text-white'}`}>About Me</button>
+                    <button onClick={()=>setActiveTab('portfolio')} className={`transition-colors ${activeTab==='portfolio'?'text-accent':'text-gray-400 hover:text-white'}`}>Portfolio</button>
+                    <button onClick={()=>setActiveTab('reviews')} className={`transition-colors ${activeTab==='reviews'?'text-accent':'text-gray-400 hover:text-white'}`}>Reviews</button>
+                    {isAdmin && <button onClick={()=>setActiveTab('admin')} className={`transition-colors ${activeTab==='admin'?'text-accent':'text-gray-400 hover:text-white'}`}>Admin Panel</button>}
+                    {isAdmin ? (
+                        <button onClick={logout} className="bg-red-900/80 hover:bg-red-800 text-white px-4 py-2 rounded border border-red-600 transition-colors font-bold text-sm">Logout (Admin)</button>
+                    ) : (
+                        <button onClick={()=>setShowAuth(true)} className="text-sm text-gray-500 hover:text-white">Admin</button>
+                    )}
+                </nav>
+            </header>
+
+            <main className="flex-grow p-8 max-w-7xl mx-auto w-full relative">
+                {error && <div className="mb-8 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-sm"><span>{error}</span><button className="float-right" onClick={()=>setError('')}>×</button></div>}
+                {loading ? <div className="py-24 text-center text-gray-500">Loading…</div> : <>
+                    {activeTab==='about' && <AboutMe />}
+                    {activeTab==='portfolio' && <PortfolioTab projects={projects} setProjects={setProjects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} />}
+                    {activeTab==='reviews' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} />}
+                    {activeTab==='admin' && isAdmin && <AdminTab reviews={reviews} inviteCodes={inviteCodes} reloadReviews={loadReviews} reloadProjects={loadProjects} reloadCodes={loadInviteCodes} onError={setError} onToast={setToast} />}
+                </>}
+            </main>
+
+            <footer className="max-w-7xl mx-auto w-full px-8 pb-8 text-xs text-gray-600">M3owL · Polish Game Translator · _m3owl</footer>
+            {showAuth && <LoginModal onSuccess={handleLoginSuccess} onCancel={()=>setShowAuth(false)} />}
+            {toast && <div className="fixed bottom-5 right-5 z-[200] glass rounded-xl px-4 py-3 text-sm font-bold text-gray-200 shadow-2xl">{toast}</div>}
+        </div>
+    );
+}
+
+function LoginModal({onSuccess,onCancel}) {
+    const [email,setEmail]=useState('');
+    const [password,setPassword]=useState('');
+    const [error,setError]=useState('');
+    const [busy,setBusy]=useState(false);
+    const handleLogin=async(e)=>{
+        e.preventDefault();
+        if(!supabase)return setError('Supabase is not configured.');
+        setBusy(true);setError('');
+        const {data,error:loginError}=await supabase.auth.signInWithPassword({email,password});
+        setBusy(false);
+        if(loginError)return setError(loginError.message);
+        onSuccess(data.session);
+    };
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="glass p-8 rounded-xl w-full max-w-md border border-gray-700">
+            <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">Admin Login</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div>
+            <form onSubmit={handleLogin} className="space-y-4">
+                <Field label="Email"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="form-input" required /></Field>
+                <Field label="Password"><input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="form-input" required /></Field>
+                {error && <p className="text-red-400 text-sm font-bold">{error}</p>}
+                <div className="flex gap-4 pt-2"><button disabled={busy} type="submit" className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Logging in…':'Login'}</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button></div>
+            </form>
+        </div>
+    </div>;
+}
+
+function AboutMe(){
+    return <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
+        <h2 className="text-4xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">About Me</h2>
+        <div className="glass p-8 rounded-xl">
+            <h3 className="text-2xl font-bold text-accent mb-4">Hello, I'm MeowL</h3>
+            <p className="text-gray-300 text-lg leading-relaxed mb-4">I am a Junior Polish Game Translator focusing on video games and game-development communities. With a proper word keys, context and details, I ensure that your game feels native and natural to Polish players.</p>
+            <p className="text-gray-300 text-lg leading-relaxed">I help developers reach the Polish gaming market with high-quality, natural-sounding translations tailored to the context of their games.</p>
+            <div className="mt-8 pt-6 border-t border-gray-700 flex flex-col gap-2"><p><strong className="text-white">Discord:</strong> <span className="font-mono text-accent">_m3owl</span></p><p><strong className="text-white">Role:</strong> Polish Game Translator / Localization Junior</p></div>
+        </div>
+    </div>;
+}
+
+function PortfolioTab({projects,setProjects,reviews,isAdmin,onChanged,onError}) {
+    const [showModal,setShowModal]=useState(false);
+    const [editingProject,setEditingProject]=useState(null);
+    const openForm=(p=null)=>{setEditingProject(p);setShowModal(true);};
+    const saveProject=async(data)=>{
+        if(!supabase)return;
+        const payload={title:data.title.trim(),steam_url:data.steamLink?.trim()||null,details:data.details||'',pinned_reviews:data.pinnedReviews||[]};
+        const result=editingProject ? await supabase.from('projects').update(payload).eq('id',editingProject.id) : await supabase.from('projects').insert(payload);
+        if(result.error){onError(result.error.message);return;}
+        await onChanged();setShowModal(false);setEditingProject(null);
+    };
+    const deleteProject=async(id)=>{
+        if(!confirm('Delete this project?'))return;
+        const {error}=await supabase.from('projects').delete().eq('id',id);
+        if(error)return onError(error.message);
+        await onChanged();
+    };
+    return <div className="animate-fade-in relative">
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Portfolio</h2>{isAdmin&&<button onClick={()=>openForm()} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
+        {projects.length===0?<p className="text-gray-500 text-xl text-center mt-12">No projects added yet.</p>:<div className="space-y-12">{projects.map(proj=>{
+            const appId=getSteamAppId(proj.steamLink);
+            const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
+            const logoUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;
+            return <div key={proj.id} className="glass rounded-xl overflow-hidden shadow-2xl border border-gray-700 relative">
+                {bannerUrl&&<div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${bannerUrl})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div></div>}
+                <div className="p-8 relative z-10">
+                    <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-4">{logoUrl&&<img src={logoUrl} alt="Game Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}<div><h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>{proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Steam Store Page</a>}</div></div>{isAdmin&&<div className="flex gap-2"><button onClick={()=>openForm(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button><button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button></div>}</div>
+                    <div className="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">{proj.details}</div>
+                </div>
+                {proj.pinnedReviews?.length>0&&<PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews}/>} 
+            </div>;
+        })}</div>}
+        {showModal&&<ProjectFormModal project={editingProject} reviews={reviews} onSave={saveProject} onCancel={()=>{setShowModal(false);setEditingProject(null)}} />}
+    </div>;
+}
+
+function PinnedReviewsSection({pinnedReviewIds,reviews}){
+    const containerRef=React.useRef(null);
+    const [shouldScroll,setShouldScroll]=useState(false);
+    const pinnedReviewsList=pinnedReviewIds.map(id=>reviews.find(r=>r.id===id)).filter(Boolean);
+    useEffect(()=>{
+        const check=()=>{if(containerRef.current)setShouldScroll(containerRef.current.scrollWidth>containerRef.current.clientWidth);};
+        check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);
+    },[pinnedReviewsList]);
+    if(!pinnedReviewsList.length)return null;
+    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent">{rev.role}</p></div></div>{rev.ratings?.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div><p className="text-xs text-gray-300 italic line-clamp-2">"{rev.text}"</p></div>;
+    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Related Reviews</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
+}
+
+function ReviewsTab({reviews,isAdmin,onRefresh,onError,onToast}){
+    const [showCodeInput,setShowCodeInput]=useState(false);
+    const displayReviews=isAdmin?reviews:reviews.filter(r=>r.published);
+    return <div className="animate-fade-in relative">
+        <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Reviews & Testimonials</h2>{!isAdmin&&<button onClick={()=>setShowCodeInput(true)} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-lg border border-gray-700 transition-colors">Have an invite code?</button>}</div>
+        {displayReviews.length===0?<p className="text-gray-500 text-xl text-center mt-12">No reviews available.</p>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{displayReviews.map(review=><ReviewCard key={review.id} review={review} admin={isAdmin} onEdit={null} onDelete={null} onTogglePublish={null}/>)}</div>}
+        {showCodeInput&&<InviteCodeModal onClose={()=>setShowCodeInput(false)} onSubmitted={async()=>{setShowCodeInput(false);await onRefresh();onToast('Review submitted. Awaiting approval.')}} onError={onError}/>} 
+    </div>;
+}
+
+function ReviewCard({review,admin,onEdit,onDelete,onTogglePublish}){
+    const average=calculateAverageRating(review.ratings);
+    return <div className={`glass rounded-xl p-6 shadow-xl flex flex-col ${admin&&!review.published?'opacity-50 grayscale border-dashed':''}`}>
+        <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-4"><div className="flex items-center gap-4"><img src={review.pfp||avatarFallback(review.nickname)} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-gray-500" onError={e=>e.currentTarget.src=avatarFallback(review.nickname)}/><div><h3 className="text-lg font-bold text-white leading-tight">{review.nickname}</h3><p className="text-xs text-accent font-semibold">{review.role}</p>{review.discord&&<p className="text-[10px] text-gray-500 mt-1">{review.discord}</p>}<p className="text-[10px] text-gray-500 mt-1">{formatDate(review.date)}</p></div></div>{review.ratings?.length>0&&<div className="text-right"><div className="text-sm font-mono font-bold text-yellow-400">{average.toFixed(1)} / 5</div>{renderStars(average)}</div>}</div>
+        <p className="text-gray-300 text-sm italic flex-grow mb-6">"{review.text}"</p>
+        {review.ratings?.length>0&&<div className="space-y-1 bg-gray-900/50 p-3 rounded-lg mb-4">{review.ratings.map((rating,idx)=><div key={idx} className="flex justify-between items-center"><span className="text-xs font-semibold text-gray-400">{rating.category}</span><div className="flex items-center gap-2"><span className="text-yellow-400 text-xs font-mono">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div></div>)}</div>}
+        {admin&&<div className="flex gap-2 mt-auto border-t border-gray-700 pt-4"><button onClick={()=>onTogglePublish(review.id,!review.published)} className={`flex-1 text-xs py-1 rounded font-bold ${review.published?'bg-green-900/50 text-green-400':'bg-gray-700 text-gray-400'}`}>{review.published?'Published':'Hidden'}</button><button onClick={()=>onEdit(review)} className="flex-1 bg-blue-900/50 text-blue-400 rounded text-xs font-bold py-1">Edit</button><button onClick={()=>onDelete(review.id)} className="flex-1 bg-red-900/50 text-red-400 rounded text-xs font-bold py-1">Delete</button></div>}
+    </div>;
+}
+
+function InviteCodeModal({onClose,onSubmitted,onError}){
+    const [code,setCode]=useState('');
+    const [data,setData]=useState(null);
+    const [error,setError]=useState('');
+    const [busy,setBusy]=useState(false);
+    const [reviewText,setReviewText]=useState('');
+    const verify=async e=>{
+        e.preventDefault();if(!supabase)return;
+        setBusy(true);setError('');
+        const {data:preview,error:rpcError}=await supabase.rpc('get_invite_code_preview',{input_code:code.trim().toUpperCase()});
+        setBusy(false);
+        if(rpcError||!preview||!preview.length)return setError('Invalid or already used invite code.');
+        setData(preview[0]);
+    };
+    const submit=async e=>{
+        e.preventDefault();if(!data||!reviewText.trim())return;
+        setBusy(true);setError('');
+        const {error:rpcError}=await supabase.rpc('submit_review_with_code',{input_code:code.trim().toUpperCase(),input_discord_username:data.discord_username||null,input_review_text:reviewText.trim()});
+        setBusy(false);
+        if(rpcError)return setError(rpcError.message);
+        await onSubmitted();
+    };
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl w-full max-w-lg border border-gray-700"><div className="flex justify-between mb-5"><h3 className="text-xl font-bold text-accent">Use Invite Code</h3><button onClick={onClose} className="text-gray-500 hover:text-white text-2xl">×</button></div>{!data?<form onSubmit={verify} className="space-y-4"><Field label="Invite code"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} className="form-input font-mono font-bold" placeholder="ABC123" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<button disabled={busy} className="w-full bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{busy?'Checking…':'Verify code'}</button></form>:<form onSubmit={submit} className="space-y-4"><div className="p-3 bg-gray-900 rounded border border-gray-700 flex items-center gap-3"><img src={data.avatar_url||avatarFallback(data.nickname)} className="w-10 h-10 rounded-full object-cover" alt=""/><div><b>{data.nickname}</b><div className="text-accent text-xs">{data.role}</div></div></div><Field label="Your review"><textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} className="form-input min-h-32" required/></Field>{error&&<p className="text-red-400 text-sm font-bold">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={busy} className="flex-1 bg-accent text-darker font-bold py-2 rounded">{busy?'Sending…':'Submit review'}</button></div></form>}</div></div>;
+}
+
+function AdminTab({reviews,inviteCodes,reloadReviews,reloadProjects,reloadCodes,onError,onToast}){
+    const [editing,setEditing]=useState(null);
+    const [showForm,setShowForm]=useState(false);
+    const [creatingCode,setCreatingCode]=useState(false);
+    const [codeBusy,setCodeBusy]=useState(false);
+    const [codeAvatar,setCodeAvatar]=useState('');
+    const [codeAvatarBusy,setCodeAvatarBusy]=useState(false);
+
+    const deleteReview=async id=>{if(!confirm('Delete this review permanently?'))return;const {error}=await supabase.from('reviews').delete().eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast('Review deleted.')};
+    const togglePublish=async(id,published)=>{const {error}=await supabase.from('reviews').update({published}).eq('id',id);if(error)return onError(error.message);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(published?'Review published.':'Review hidden.')};
+    const uploadCodeAvatar=async file=>{
+        if(!file||!supabase)return;
+        if(file.size>6*1024*1024)return onError('Avatar must be under 6 MB.');
+        setCodeAvatarBusy(true);
+        const path=`invite-${crypto.randomUUID()}-${file.name.toLowerCase().replace(/[^a-z0-9._-]/g,'-')}`;
+        const {error}=await supabase.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
+        if(error){setCodeAvatarBusy(false);return onError(error.message)}
+        const {data}=supabase.storage.from('review-avatars').getPublicUrl(path);
+        setCodeAvatar(data.publicUrl);setCodeAvatarBusy(false);
+    };
+    const createInviteCode=async e=>{
+        e.preventDefault();
+        const form=new FormData(e.currentTarget);
+        const nickname=String(form.get('nickname')||'').trim();
+        const role=String(form.get('role')||'').trim();
+        if(!nickname||!role)return;
+        setCodeBusy(true);
+        for(let attempt=0;attempt<8;attempt++){
+            const code=Math.random().toString(36).slice(2,8).toUpperCase();
+            const {error}=await supabase.from('invite_codes').insert({code,nickname,role,avatar_url:codeAvatar||null,used:false});
+            if(!error){setCreatingCode(false);e.currentTarget.reset();setCodeAvatar('');await reloadCodes();onToast(`Invite code ${code} created.`);setCodeBusy(false);return;}
+            if(error.code!=='23505'){setCodeBusy(false);return onError(error.message)}
+        }
+        setCodeBusy(false);onError('Could not generate a unique invite code.');
+    };
+    const revokeCode=async id=>{if(!confirm('Delete this unused invite code?'))return;const {error}=await supabase.from('invite_codes').delete().eq('id',id).eq('used',false);if(error)return onError(error.message);await reloadCodes();onToast('Invite code revoked.')};
+
+    return <div className="animate-fade-in">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 border-b border-gray-800 pb-4"><div><h2 className="text-4xl font-extrabold">Admin Panel</h2><p className="text-gray-500 mt-2">Permanent data stored in Supabase.</p></div><div className="flex gap-3"><button onClick={()=>{setEditing(null);setShowForm(true)}} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-5 py-2 rounded">+ Add Review</button><button onClick={()=>setCreatingCode(true)} className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-800 px-4 py-2 rounded font-bold">+ Invite Code</button></div></div>
+        {inviteCodes.length>0&&<div className="mb-8 p-4 bg-gray-900 border border-gray-700 rounded-lg"><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm font-bold text-gray-400">Active Invite Codes (one-time use)</p><span className="text-xs text-gray-600">Each code becomes permanently invalid after submission.</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{inviteCodes.map(item=><div key={item.id} className="bg-gray-800 border border-gray-700 p-3 rounded-lg flex items-center justify-between"><div className="flex items-center gap-3"><img src={item.pfp||avatarFallback(item.nickname)} className="w-8 h-8 rounded-full object-cover border border-gray-600" alt=""/><div><p className="text-xs font-bold text-white">{item.nickname}</p><p className="text-[10px] text-accent">{item.role}</p></div></div><div className="flex items-center gap-2"><span className="bg-gray-900 border border-gray-600 px-2 py-1 rounded text-accent font-mono font-bold text-sm">{item.code}</span><button className="text-red-400 text-xs hover:text-red-300" onClick={()=>revokeCode(item.id)} title="Revoke unused code">×</button></div></div>)}</div></div>}
+        <div className="mb-12"><h3 className="text-xl font-bold mb-4 text-gray-300">Reviews</h3>{reviews.length===0?<div className="glass rounded-xl p-10 text-center text-gray-500">No reviews in the database.</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{reviews.map(r=><ReviewCard key={r.id} review={r} admin onEdit={r=>{setEditing(r);setShowForm(true)}} onDelete={deleteReview} onTogglePublish={togglePublish}/>)}</div>}</div>
+        <div className="glass rounded-xl p-6 border border-gray-700"><div className="flex items-center justify-between mb-4"><div><h3 className="text-xl font-bold">Projects</h3><p className="text-sm text-gray-500">Projects are persistent too. Manage them from the Portfolio tab.</p></div><button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded text-sm font-bold">Go to Portfolio</button></div></div>
+        {showForm&&<ReviewFormModal review={editing} onSave={async()=>{setShowForm(false);setEditing(null);await Promise.all([reloadReviews(true),reloadReviews(false)]);onToast(editing?'Review updated.':'Review created.')}} onCancel={()=>{setShowForm(false);setEditing(null)}} onError={onError}/>} 
+        {creatingCode&&<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"><div className="glass p-6 rounded-xl border border-gray-700 max-w-md w-full"><div className="flex justify-between items-center mb-5"><div><h3 className="text-xl font-bold text-purple-300">Generate Invite Code</h3><p className="text-xs text-gray-500 mt-1">One-time use. It expires immediately after the reviewer submits the review.</p></div><button onClick={()=>setCreatingCode(false)} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={createInviteCode} className="space-y-4"><Field label="Reviewer avatar"><input type="file" accept="image/*" disabled={codeAvatarBusy} onChange={e=>uploadCodeAvatar(e.target.files?.[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm"/>{codeAvatarBusy&&<p className="text-xs text-gray-500 mt-1">Uploading…</p>}{codeAvatar&&<img src={codeAvatar} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nickname"><input name="nickname" className="form-input" required /></Field><Field label="Role (e.g. Community Manager)"><input name="role" className="form-input" required /></Field><div className="flex gap-4 pt-2"><button type="button" onClick={()=>setCreatingCode(false)} className="flex-1 bg-gray-700 text-white font-bold py-2 rounded">Cancel</button><button disabled={codeBusy||codeAvatarBusy} className="flex-1 bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-bold py-2 rounded">{codeBusy?'Generating…':'Generate'}</button></div></form></div></div>}
+    </div>;
+}
+
+function ReviewFormModal({review,onSave,onCancel,onError}){
+    const [formData,setFormData]=useState(()=>({
+        pfp:review?.pfp||review?.avatar_url||'',
+        nickname:review?.nickname||'',
+        discord:review?.discord||review?.discord_username||'',
+        role:review?.role||'',
+        text:review?.text||review?.review_text||'',
+        ratings:Array.isArray(review?.ratings)?review.ratings.map(r=>({...r})):defaultCategories.map(c=>({...c})),
+        published:review?.published??true
+    }));
+    const [saving,setSaving]=useState(false),[uploading,setUploading]=useState(false);
+    const avg=useMemo(()=>calculateAverageRating(formData.ratings),[formData.ratings]);
+    const uploadAvatar=async file=>{
+        if(!file||!supabase)return;
+        if(file.size>6*1024*1024)return onError('Avatar must be under 6 MB.');
+        setUploading(true);
+        const path=`review-${crypto.randomUUID()}-${file.name.toLowerCase().replace(/[^a-z0-9._-]/g,'-')}`;
+        const {error}=await supabase.storage.from('review-avatars').upload(path,file,{upsert:false,contentType:file.type});
+        if(error){setUploading(false);return onError(error.message)}
+        const {data}=supabase.storage.from('review-avatars').getPublicUrl(path);
+        setFormData(f=>({...f,pfp:data.publicUrl}));setUploading(false);
+    };
+    const save=async e=>{
+        e.preventDefault();
+        if(!supabase)return;
+        if(!formData.nickname.trim()||!formData.text.trim())return onError('Nickname and Review Text are required.');
+        setSaving(true);
+        const payload={nickname:formData.nickname.trim(),discord_username:formData.discord.trim()||null,role:formData.role.trim()||null,review_text:formData.text.trim(),avatar_url:formData.pfp.trim()||null,ratings:(formData.ratings||[]).map(r=>({category:String(r.category||'').trim(),value:Math.max(0,Math.min(5,Math.round(Number(r.value)*2)/2))})).filter(r=>r.category&&Number.isFinite(r.value)),published:!!formData.published};
+        const result=review?await supabase.from('reviews').update(payload).eq('id',review.id):await supabase.from('reviews').insert(payload);
+        setSaving(false);
+        if(result.error)return onError(result.error.message);
+        await onSave();
+    };
+    const updateRating=(index,value)=>setFormData(f=>{const a=[...f.ratings];a[index]={...a[index],value};return {...f,ratings:a}});
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8 max-h-[94vh] overflow-y-auto"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-accent">{review?'Edit Review':'Add Review'}</h2><button onClick={onCancel} className="text-gray-500 hover:text-white text-2xl">×</button></div><form onSubmit={save} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Avatar"><input type="file" accept="image/*" disabled={uploading} onChange={e=>uploadAvatar(e.target.files?.[0])} className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-white text-sm"/>{uploading&&<div className="text-xs text-gray-500 mt-1">Uploading…</div>}{formData.pfp&&<img src={formData.pfp} className="w-10 h-10 rounded-full mt-2 border border-gray-600 object-cover" alt=""/>}</Field><Field label="Nickname"><input value={formData.nickname} onChange={e=>setFormData({...formData,nickname:e.target.value})} className="form-input" required /></Field><Field label="Discord Username"><input value={formData.discord} onChange={e=>setFormData({...formData,discord:e.target.value})} className="form-input" /></Field><Field label="Role"><input value={formData.role} onChange={e=>setFormData({...formData,role:e.target.value})} className="form-input" placeholder="Community Manager" /></Field></div><Field label="Review Text"><textarea value={formData.text} onChange={e=>setFormData({...formData,text:e.target.value})} className="form-input h-28" required /></Field><div className="p-4 bg-gray-900 rounded border border-gray-700"><div className="flex justify-between items-center mb-3"><label className="text-sm font-bold text-accent">Ratings (Average: {avg.toFixed(1)} / 5)</label><button type="button" onClick={()=>setFormData(f=>({...f,ratings:[...f.ratings,{category:'New category',value:5}]}))} className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-3 py-2 font-bold">+ Add category</button></div>{formData.ratings.length===0?<p className="text-xs text-gray-500 italic">No ratings added.</p>:formData.ratings.map((rating,idx)=><div key={idx} className="flex items-center justify-between gap-3 mb-2"><input value={rating.category} onChange={e=>{const a=[...formData.ratings];a[idx]={...a[idx],category:e.target.value};setFormData({...formData,ratings:a})}} className="bg-gray-950 border border-gray-700 rounded p-2 text-white text-xs w-1/3"/><input type="range" min="0" max="5" step="0.5" value={rating.value} onChange={e=>updateRating(idx,parseFloat(e.target.value))} className="w-1/3 accent-accent"/><div className="flex items-center gap-2 w-28 justify-end"><span className="text-yellow-400 font-mono text-xs">{Number(rating.value).toFixed(1)}</span>{renderStars(rating.value)}</div><button type="button" onClick={()=>setFormData(f=>({...f,ratings:f.ratings.filter((_,i)=>i!==idx)}))} className="text-red-500 hover:text-red-400 font-bold text-xs px-2 py-1 bg-red-950/40 border border-red-900/50 rounded">✕</button></div>)}</div><label className="flex items-center gap-2 cursor-pointer text-white font-bold text-sm"><input type="checkbox" checked={formData.published} onChange={e=>setFormData({...formData,published:e.target.checked})} className="w-4 h-4 accent-accent rounded"/>Publish immediately</label><div className="flex gap-4 pt-2 border-t border-gray-700"><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button><button disabled={saving||uploading} className="flex-1 bg-accent hover:bg-cyan-400 disabled:opacity-50 text-darker font-bold py-2 rounded">{saving?'Saving…':'Save Review'}</button></div></form></div></div>;
+}
+
+function ProjectFormModal({project,reviews,onSave,onCancel}){
+    const [formData,setFormData]=useState(()=>project?{...project,pinnedReviews:project.pinnedReviews||[]}:{title:'',steamLink:'',details:'',pinnedReviews:[]});
+    const togglePin=revId=>setFormData(f=>({...f,pinnedReviews:f.pinnedReviews.includes(revId)?f.pinnedReviews.filter(id=>id!==revId):[...f.pinnedReviews,revId]}));
+    const handleSubmit=e=>{e.preventDefault();if(!formData.title.trim())return alert('Title is required.');onSave(formData)};
+    return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"><div className="glass p-8 rounded-xl w-full max-w-2xl border border-gray-700 my-8"><h2 className="text-2xl font-bold mb-6 text-accent">{project?'Edit Project':'New Project'}</h2><form onSubmit={handleSubmit} className="space-y-4"><Field label="Game Title"><input type="text" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})} className="form-input" required/></Field><Field label="Steam URL"><input type="url" value={formData.steamLink} onChange={e=>setFormData({...formData,steamLink:e.target.value})} className="form-input" placeholder="https://store.steampowered.com/app/..." /></Field><Field label="Translation Details"><textarea value={formData.details} onChange={e=>setFormData({...formData,details:e.target.value})} className="form-input h-32" /></Field><div><label className="block text-sm font-bold text-accent mb-2">Pin Reviews to this Project</label><div className="bg-gray-900 border border-gray-700 p-4 rounded max-h-48 overflow-y-auto space-y-2">{reviews.map(rev=><label key={rev.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-800 rounded"><input type="checkbox" checked={formData.pinnedReviews.includes(rev.id)} onChange={()=>togglePin(rev.id)} className="w-4 h-4 accent-accent"/><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-6 h-6 rounded-full object-cover" alt=""/><span className="text-sm font-bold text-white">{rev.nickname}</span><span className="text-xs text-gray-500 truncate max-w-[200px]">"{rev.text}"</span></label>)}{reviews.length===0&&<p className="text-xs text-gray-500">No reviews available to pin.</p>}</div></div><div className="flex gap-4 pt-4 border-t border-gray-700"><button type="submit" className="flex-1 bg-accent hover:bg-cyan-400 text-darker font-bold py-2 rounded">Save Project</button><button type="button" onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded">Cancel</button></div></form></div></div>;
+}
+
 function Field({label,children}){return <label className="block"><span className="block text-sm font-bold text-gray-400 mb-1">{label}</span>{children}</label>}
-function InteractiveStars({value,onChange}){return <div className="flex items-center">{[1,2,3,4,5].map(s=><button key={s} type="button" className="star-button" title={`Set ${s} stars`} onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();onChange((e.clientX-rect.left)<rect.width/2?s-.5:s)}}>{s<=Math.floor(value)?'⭐':(s-.5===value?'⭐':'☆')}</button>)}</div>}
-function Stars({value}){return <div className="flex gap-0.5 items-center">{[1,2,3,4,5].map(s=><span key={s} className="text-[1rem] leading-none">{s<=Math.floor(value)?'⭐':(s-.5===Number(value)?'⭐':'☆')}</span>)}</div>}
-function getSteamAppId(url){if(!url)return null;const m=url.match(/\/app\/(\d+)/);return m?m[1]:null}
-function averageRating(ratings){if(!Array.isArray(ratings)||!ratings.length)return 0;const v=ratings.map(r=>Number(r.value)).filter(Number.isFinite);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
-function formatDate(v){return v?new Date(v).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):''}
-function avatarFallback(name){return `https://ui-avatars.com/api/?name=${encodeURIComponent(name||'User')}&background=0f172a&color=fff`}
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
