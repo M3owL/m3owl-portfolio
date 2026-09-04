@@ -4,34 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M3owL - Polish Translator Portfolio</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    
+    <!-- Pakiety podstawowe -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Pancerny loader Supabase z fallbackami -->
+    <script>
+        (function loadSupabase() {
+            const cdns = [
+                'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.39.8/supabase.js',
+                'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+            ];
+            let index = 0;
+            function tryNext() {
+                if (index >= cdns.length) {
+                    window.__supabaseLoadFailed = true;
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = cdns[index++];
+                script.onerror = tryNext;
+                document.head.appendChild(script);
+            }
+            tryNext();
+        })();
+    </script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
-                    colors: {
-                        dark: '#0f172a',
-                        darker: '#020617',
-                        accent: '#06b6d4'
-                    },
+                    colors: { dark: '#0f172a', darker: '#020617', accent: '#06b6d4' },
                     animation: { 
                         'scroll': 'scroll 30s linear infinite',
                         'fade-in': 'fadeIn 0.25s ease-out forwards'
                     },
                     keyframes: {
-                        scroll: {
-                            '0%': { transform: 'translateX(0)' },
-                            '100%': { transform: 'translateX(-50%)' }
-                        },
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(6px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        }
+                        scroll: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } },
+                        fadeIn: { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
                     }
                 }
             }
@@ -44,22 +59,19 @@
         .hide-scrollbar { -ms-overflow-style:none;scrollbar-width:none }
         .marquee-container { display:flex;width:max-content }
         .marquee-container:hover { animation-play-state:paused }
-        .star-button { font-size:1.35rem;line-height:1;width:1.5rem;height:1.7rem;padding:0;border:0;background:transparent;cursor:pointer;user-select:none }
         .form-input { width:100%;background:#111827;border:1px solid #374151;border-radius:.375rem;padding:.55rem .65rem;color:#fff }
         .form-input:focus { border-color:#06b6d4;outline:none }
     </style>
 </head>
 <body>
 <div id="root"></div>
+
 <script type="text/babel">
 const { useState, useEffect, useMemo } = React;
 
-/* ============================================================
-   SUPABASE CONFIG
-   ============================================================ */
 const SUPABASE_URL = 'https://empvklffqwrlllovhgzx.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_an1FqOGAgwRQCzxp6UWuvQ_TFadZ9EW';
-const supabaseConfigured = SUPABASE_URL.startsWith('https://') && !!SUPABASE_PUBLISHABLE_KEY;
+
 let supabase = null;
 let supabaseInitError = '';
 
@@ -71,28 +83,19 @@ const authStorage = {
     removeItem: (key) => { localStorage.removeItem(key); sessionStorage.removeItem(key); }
 };
 
-try {
-    if (supabaseConfigured && window.supabase && typeof window.supabase.createClient === 'function') {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:authStorage }
-        });
-    } else if (supabaseConfigured) {
-        supabaseInitError = 'Supabase client library did not load.';
+function initSupabaseClient() {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+        try {
+            return window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+                auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authStorage }
+            });
+        } catch (e) {
+            supabaseInitError = 'Błąd inicjalizacji klienta Supabase.';
+            return null;
+        }
     }
-} catch (e) {
-    supabaseInitError = e && e.message ? e.message : String(e);
-    supabase = null;
+    return null;
 }
-window.addEventListener('error', function(e) {
-    var box = document.getElementById('fatal-error');
-    if (!box) {
-        box = document.createElement('pre');
-        box.id = 'fatal-error';
-        box.style.cssText = 'position:fixed;inset:12px;z-index:999999;background:#111827;color:#fca5a5;padding:16px;overflow:auto;border:1px solid #ef4444;border-radius:12px;white-space:pre-wrap;font:13px monospace';
-        document.body.appendChild(box);
-    }
-    box.textContent = 'JavaScript error:\n\n' + (e.error && e.error.stack ? e.error.stack : e.message);
-});
 
 const defaultCategories = [
     { category:'Speed', value:5 },
@@ -189,22 +192,30 @@ function App() {
         let query = supabase.from('reviews').select('*').order('created_at',{ascending:false});
         if (!adminView) query = query.eq('published',true);
         const {data,error} = await query;
-        if (error) { setError(error.message); return; }
+        if (error) { handleNetworkError(error); return; }
         setReviews((data || []).map(normalizeReview));
     };
 
     const loadProjects = async () => {
         if (!supabase) return;
         const {data,error} = await supabase.from('projects').select('*').order('created_at',{ascending:false});
-        if (error) { setError(error.message); return; }
+        if (error) { handleNetworkError(error); return; }
         setProjects((data || []).map(normalizeProject));
     };
 
     const loadInviteCodes = async () => {
         if (!supabase || !isAdmin) return;
         const {data,error} = await supabase.from('invite_codes').select('*').eq('used',false).order('created_at',{ascending:false});
-        if (error) { setError(error.message); return; }
+        if (error) { handleNetworkError(error); return; }
         setInviteCodes((data || []).map(normalizeCode));
+    };
+
+    const handleNetworkError = (err) => {
+        if (err && (err.message?.includes('Failed to fetch') || err.status === 0)) {
+            setError('AdBlock lub rozszerzenie prywatności blokuje połączenie z bazą danych Supabase. Wyłącz bloker dla tej strony.');
+        } else if (err) {
+            setError(err.message);
+        }
     };
 
     const checkAdmin = async (currentSession) => {
@@ -219,43 +230,44 @@ function App() {
     };
 
     useEffect(() => {
-        if (!supabaseConfigured) { setError('Supabase is not configured.'); setLoading(false); return; }
-        if (!supabase) { setError(supabaseInitError || 'Supabase client could not be initialized.'); setLoading(false); return; }
-        let alive = true;
-        (async () => {
-            const {data:{session:currentSession}} = await supabase.auth.getSession();
-            if (!alive) return;
-            setSession(currentSession);
-            const admin = await checkAdmin(currentSession);
-            await Promise.all([loadReviews(admin), loadProjects()]);
-            if (admin) await loadInviteCodes();
-            setLoading(false);
-        })();
+        let attempts = 0;
+        const checkLibrary = setInterval(async () => {
+            attempts++;
+            if (!supabase) supabase = initSupabaseClient();
 
-        const {data:authSub} = supabase.auth.onAuthStateChange(async (_event,newSession) => {
-            setSession(newSession);
-            const admin = await checkAdmin(newSession);
-            await loadReviews(admin);
-            if (admin) await loadInviteCodes();
-            else setInviteCodes([]);
-        });
+            if (supabase) {
+                clearInterval(checkLibrary);
+                try {
+                    const {data:{session:currentSession}} = await supabase.auth.getSession();
+                    setSession(currentSession);
+                    const admin = await checkAdmin(currentSession);
+                    await Promise.all([loadReviews(admin), loadProjects()]);
+                    if (admin) await loadInviteCodes();
+                } catch (e) {
+                    handleNetworkError(e);
+                } finally {
+                    setLoading(false);
+                }
 
-        const channel = supabase.channel('m3owl-live')
-            .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},async () => {
-                const {data:{session:currentSession}} = await supabase.auth.getSession();
-                const admin = await checkAdmin(currentSession);
-                await loadReviews(admin);
-            })
-            .on('postgres_changes',{event:'*',schema:'public',table:'projects'},loadProjects)
-            .on('postgres_changes',{event:'*',schema:'public',table:'invite_codes'},loadInviteCodes)
-            .subscribe();
+                supabase.channel('m3owl-live')
+                    .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},async () => {
+                        const {data:{session:currentSession}} = await supabase.auth.getSession();
+                        const admin = await checkAdmin(currentSession);
+                        await loadReviews(admin);
+                    })
+                    .on('postgres_changes',{event:'*',schema:'public',table:'projects'},loadProjects)
+                    .on('postgres_changes',{event:'*',schema:'public',table:'invite_codes'},loadInviteCodes)
+                    .subscribe();
 
-        return () => {
-            alive = false;
-            if (authSub && authSub.subscription) authSub.subscription.unsubscribe();
-            supabase.removeChannel(channel);
-        };
-    },[]);
+            } else if (window.__supabaseLoadFailed || attempts > 15) {
+                clearInterval(checkLibrary);
+                setError('AdBlock zablokował ładowanie biblioteki Supabase z serwerów CDN. Wyłącz bloker reklam i odśwież stronę.');
+                setLoading(false);
+            }
+        }, 200);
+
+        return () => clearInterval(checkLibrary);
+    }, []);
 
     useEffect(() => {
         if (!toast) return;
@@ -305,8 +317,8 @@ function App() {
             </header>
 
             <main className="flex-grow p-8 max-w-7xl mx-auto w-full relative">
-                {error && <div className="mb-8 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-sm"><span>{error}</span><button className="float-right" onClick={()=>setError('')}>×</button></div>}
-                {loading ? <div className="py-24 text-center text-gray-500">Loading…</div> : <>
+                {error && <div className="mb-8 p-4 rounded-xl border border-red-500/50 bg-red-950/40 text-red-200 text-sm flex justify-between items-center"><span>⚠️ <b>Problem z połączeniem:</b> {error}</span><button className="text-lg font-bold ml-4" onClick={()=>setError('')}>×</button></div>}
+                {loading ? <div className="py-24 text-center text-gray-500">Łączenie z usługą...</div> : <>
                     {activeTab==='about' && <AboutMe />}
                     {activeTab==='portfolio' && <PortfolioTab projects={projects} setProjects={setProjects} reviews={reviews} isAdmin={isAdmin} onChanged={loadProjects} onError={setError} />}
                     {activeTab==='reviews' && <ReviewsTab reviews={reviews} isAdmin={isAdmin} onRefresh={()=>loadReviews(isAdmin)} onError={setError} onToast={setToast} />}
@@ -342,7 +354,7 @@ function LoginModal({onSuccess,onCancel}) {
     const [busy,setBusy]=useState(false);
     const login=async(e)=>{
         e.preventDefault();
-        if(!supabase)return setError('Supabase is not configured.');
+        if(!supabase)return setError('Brak połączenia z bazą.');
         setBusy(true);setError('');
         localStorage.setItem(REMEMBER_KEY, remember ? 'true' : 'false');
         if(!remember){
