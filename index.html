@@ -462,7 +462,6 @@ function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectMod
         newProjects[index] = newProjects[targetIndex];
         newProjects[targetIndex] = temp;
 
-        // Update sort_order for all affected or all items
         for (let i = 0; i < newProjects.length; i++) {
             await client.from('projects').update({ sort_order: i }).eq('id', newProjects[i].id);
         }
