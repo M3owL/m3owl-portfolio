@@ -448,6 +448,7 @@ function AboutMe(){
 
 function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectModal}) {
     const client = getSupabase();
+    
     const deleteProject=async(id)=>{
         if(!confirm('Delete this project?'))return;
         const {error}=await client.from('projects').delete().eq('id',id);
@@ -455,16 +456,25 @@ function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectMod
         await onChanged();
     };
 
-    const moveProject = async (index, direction) => {
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= projects.length) return;
-        const newProjects = [...projects];
-        const temp = newProjects[index];
-        newProjects[index] = newProjects[targetIndex];
-        newProjects[targetIndex] = temp;
+    const sortedProjects = [...projects].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+    });
 
-        for (let i = 0; i < newProjects.length; i++) {
-            await client.from('projects').update({ sort_order: i }).eq('id', newProjects[i].id);
+    const moveProject = async (sortedIdx, direction) => {
+        const targetIdx = sortedIdx + direction;
+        if (targetIdx < 0 || targetIdx >= sortedProjects.length) return;
+
+        // Perform swap on the visually sorted array
+        const newSorted = [...sortedProjects];
+        const temp = newSorted[sortedIdx];
+        newSorted[sortedIdx] = newSorted[targetIdx];
+        newSorted[targetIdx] = temp;
+
+        // Apply new indexes as sort_order to all projects
+        for (let i = 0; i < newSorted.length; i++) {
+            await client.from('projects').update({ sort_order: i }).eq('id', newSorted[i].id);
         }
         await onChanged();
     };
@@ -475,45 +485,53 @@ function PortfolioTab({projects,reviews,isAdmin,onChanged,onError,openProjectMod
         await onChanged();
     };
 
-    const sortedProjects = [...projects].sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        return (a.sort_order || 0) - (b.sort_order || 0);
-    });
-
     return <div className="animate-fade-in relative">
         <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4"><h2 className="text-4xl font-extrabold text-white">Game Translation History</h2>{isAdmin&&<button onClick={()=>openProjectModal(null)} className="bg-accent hover:bg-cyan-400 text-darker font-extrabold px-6 py-2 rounded transition-colors flex items-center gap-2"><span className="text-xl">+</span> Add Project</button>}</div>
-        {sortedProjects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No projects added.</p>:<div className="space-y-12">{sortedProjects.map((proj, idx)=>{
-            const appId=getSteamAppId(proj.steamLink);
-            const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
-            const logoUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;
-            return <div key={proj.id} className={`glass rounded-xl overflow-hidden shadow-2xl border ${proj.pinned ? 'border-accent shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'border-gray-700'} relative`}>
-                {bannerUrl&&<div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${bannerUrl})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div></div>}
-                <div className="p-8 relative z-10">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-4">
-                            {logoUrl&&<img src={logoUrl} alt="Logo" className="max-h-16 max-w-[200px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-3xl font-bold text-white mb-1">{proj.title}</h3>
-                                    {proj.pinned && <span className="bg-accent/20 text-accent border border-accent/40 text-xs px-2 py-0.5 rounded font-bold uppercase">Pinned</span>}
+        
+        {sortedProjects.length===0?<p className="text-gray-500 text-xl font-bold text-center mt-12">No projects added.</p>:
+        
+        /* Grid Layout replaces the vertical stack */
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+            {sortedProjects.map((proj, idx)=>{
+                const appId=getSteamAppId(proj.steamLink);
+                const bannerUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`:null;
+                const logoUrl=appId?`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/logo.png`:null;
+                
+                return <div key={proj.id} className={`glass rounded-xl overflow-hidden shadow-2xl flex flex-col h-full border ${proj.pinned ? 'border-accent shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'border-gray-700'} relative`}>
+                    
+                    {bannerUrl&&<div className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center" style={{backgroundImage:`url(${bannerUrl})`}}><div className="absolute inset-0 bg-gradient-to-t from-darker via-darker/80 to-transparent"></div></div>}
+                    
+                    <div className="p-6 relative z-10 flex-grow flex flex-col">
+                        <div className="flex flex-col items-start gap-4 mb-4">
+                            {logoUrl&&<img src={logoUrl} alt="Logo" className="max-h-16 max-w-[180px] object-contain drop-shadow-md" onError={e=>e.currentTarget.style.display='none'} />}
+                            <div className="w-full">
+                                <div className="flex items-start justify-between gap-2">
+                                    <h3 className="text-2xl font-bold text-white mb-1 leading-tight">{proj.title}</h3>
+                                    {proj.pinned && <span className="bg-accent/20 text-accent border border-accent/40 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0 mt-1">Pinned</span>}
                                 </div>
-                                {proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-sm font-bold flex items-center gap-1">🔗 Steam Page</a>}
+                                {proj.steamLink&&<a href={proj.steamLink} target="_blank" rel="noreferrer" className="text-accent hover:underline text-xs font-bold flex items-center gap-1 mt-1">🔗 Steam Page</a>}
                             </div>
                         </div>
-                        {isAdmin&&<div className="flex flex-wrap gap-2 items-center">
-                            <button onClick={()=>togglePinProject(proj)} className={`px-3 py-1 rounded text-sm font-bold border ${proj.pinned ? 'bg-accent text-darker border-accent' : 'bg-gray-800 text-gray-300 border-gray-600'}`}>{proj.pinned ? 'Unpin' : 'Pin'}</button>
-                            <button onClick={()=>moveProject(idx, -1)} disabled={idx === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-sm font-bold border border-gray-600" title="Move Up">↑</button>
-                            <button onClick={()=>moveProject(idx, 1)} disabled={idx === sortedProjects.length - 1} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-sm font-bold border border-gray-600" title="Move Down">↓</button>
-                            <button onClick={()=>openProjectModal(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-3 py-1 rounded text-sm font-bold">Edit</button>
-                            <button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded text-sm font-bold">Delete</button>
+
+                        <div className="text-gray-300 text-sm font-medium leading-relaxed mb-6 whitespace-pre-wrap flex-grow">{proj.details}</div>
+
+                        {isAdmin&&<div className="flex flex-wrap gap-2 items-center mt-auto pt-4 border-t border-gray-700/50">
+                            <button onClick={()=>togglePinProject(proj)} className={`px-2 py-1 rounded text-[10px] font-bold border ${proj.pinned ? 'bg-accent text-darker border-accent' : 'bg-gray-800 text-gray-300 border-gray-600'}`}>{proj.pinned ? 'Unpin' : 'Pin'}</button>
+                            <button onClick={()=>moveProject(idx, -1)} disabled={idx === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-xs font-bold border border-gray-600" title="Move Left">←</button>
+                            <button onClick={()=>moveProject(idx, 1)} disabled={idx === sortedProjects.length - 1} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white px-2 py-1 rounded text-xs font-bold border border-gray-600" title="Move Right">→</button>
+                            <button onClick={()=>openProjectModal(proj)} className="bg-blue-900/50 text-blue-400 border border-blue-800 px-2 py-1 rounded text-[10px] font-bold ml-auto">Edit</button>
+                            <button onClick={()=>deleteProject(proj.id)} className="bg-red-900/50 text-red-400 border border-red-800 px-2 py-1 rounded text-[10px] font-bold">Delete</button>
                         </div>}
                     </div>
-                    <div className="text-gray-300 font-medium leading-relaxed mb-6 whitespace-pre-wrap">{proj.details}</div>
-                </div>
-                {proj.pinnedReviews && proj.pinnedReviews.length>0&&<PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews}/>} 
-            </div>;
-        })}</div>}
+
+                    {proj.pinnedReviews && proj.pinnedReviews.length>0&& (
+                        <div className="mt-auto">
+                            <PinnedReviewsSection pinnedReviewIds={proj.pinnedReviews} reviews={reviews}/>
+                        </div>
+                    )} 
+                </div>;
+            })}
+        </div>}
     </div>;
 }
 
@@ -526,8 +544,10 @@ function PinnedReviewsSection({pinnedReviewIds,reviews}){
         check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);
     },[pinnedReviewsList]);
     if(!pinnedReviewsList.length)return null;
-    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-80 bg-gray-800/90 border border-gray-700 rounded-lg p-4 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-8 h-8 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-sm font-bold text-white leading-tight">{rev.nickname}</p><p className="text-xs text-accent font-bold">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-xs font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-75 origin-right">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div>{rev.game_title && <p className="text-[10px] text-accent font-bold mb-1">Game: {rev.game_title}</p>}<p className="text-xs text-gray-300 italic font-medium line-clamp-2">"{rev.text}"</p></div>;
-    return <div className="bg-gray-900/90 border-t border-gray-800 p-4 relative overflow-hidden z-10"><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 ml-2">Pinned Feedbacks</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
+    
+    const card=(rev,idx)=><div key={idx} className="flex-shrink-0 w-72 bg-gray-800/90 border border-gray-700 rounded-lg p-3 mx-2"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><img src={rev.pfp||avatarFallback(rev.nickname)} className="w-6 h-6 rounded-full border border-gray-600 object-cover" alt=""/><div><p className="text-xs font-bold text-white leading-tight">{rev.nickname}</p><p className="text-[10px] text-accent font-bold">{rev.role}</p></div></div>{rev.ratings && rev.ratings.length>0&&<div className="text-right"><div className="text-[10px] font-mono font-bold text-yellow-400">{calculateAverageRating(rev.ratings).toFixed(1)} / 5</div><div className="scale-[0.6] origin-right -mt-1">{renderStars(calculateAverageRating(rev.ratings))}</div></div>}</div>{rev.game_title && <p className="text-[9px] text-accent font-bold mb-1">Game: {rev.game_title}</p>}<p className="text-[11px] text-gray-300 italic font-medium line-clamp-2">"{rev.text}"</p></div>;
+    
+    return <div className="bg-gray-900/90 border-t border-gray-800 p-3 relative overflow-hidden z-10 w-full"><p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 ml-2">Pinned Feedbacks</p><div ref={containerRef} className="w-full overflow-hidden">{shouldScroll?<div className="marquee-container animate-scroll">{[...pinnedReviewsList,...pinnedReviewsList].map(card)}</div>:<div className="flex flex-wrap gap-2 justify-start">{pinnedReviewsList.map(card)}</div>}</div></div>;
 }
 
 function ReviewsTab({reviews,isAdmin,onRefresh,onError,onToast,openCodeModal}){
